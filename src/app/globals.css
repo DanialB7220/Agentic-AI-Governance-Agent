@@ -1,0 +1,115 @@
+@import "tailwindcss";
+
+:root {
+  --background: #0b1220;
+  --foreground: #f8fafc;
+  --muted: #94a3b8;
+  --line: rgba(255, 255, 255, 0.1);
+  --gold: #f59e0b;
+  --violet: #8b5cf6;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-gold: var(--gold);
+  --color-violet: var(--violet);
+  --font-sans: var(--font-plus-jakarta);
+  --font-mono: var(--font-ibm-plex);
+}
+
+html {
+  color-scheme: dark;
+  height: 100%;
+}
+
+body {
+  background:
+    radial-gradient(1200px 600px at 10% -10%, rgba(245, 158, 11, 0.12), transparent 55%),
+    radial-gradient(900px 500px at 100% 0%, rgba(139, 92, 246, 0.12), transparent 50%),
+    var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+::selection {
+  background: rgba(245, 158, 11, 0.35);
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+.glass {
+  background: rgba(15, 23, 42, 0.62);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(18px);
+}
+
+.input {
+  width: 100%;
+  border-radius: 0.75rem;
+  border: 1px solid var(--line);
+  background: rgba(2, 6, 23, 0.45);
+  padding: 0.65rem 0.8rem;
+  font-size: 0.875rem;
+  color: white;
+}
+
+.input:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+
+.prose-aegis h1 {
+  font-size: 1.35rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.75rem;
+}
+
+.prose-aegis h2 {
+  font-size: 1.02rem;
+  font-weight: 650;
+  margin: 1.25rem 0 0.5rem;
+  color: #fde68a;
+}
+
+.prose-aegis h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 1rem 0 0.35rem;
+}
+
+.prose-aegis p,
+.prose-aegis li {
+  color: #cbd5e1;
+  line-height: 1.65;
+}
+
+.prose-aegis ul {
+  padding-left: 1.1rem;
+  margin: 0.4rem 0 0.8rem;
+  list-style: disc;
+}
+
+.prose-aegis blockquote {
+  border-left: 2px solid var(--gold);
+  padding-left: 0.85rem;
+  color: #e2e8f0;
+  margin: 0.75rem 0;
+}
+
+.prose-aegis strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
