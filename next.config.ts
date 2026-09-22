@@ -8,10 +8,6 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: projectRoot,
   },
-  serverExternalPackages: [
-    "@aws-sdk/client-bedrock-runtime",
-    "@aws-sdk/client-bedrock-agent-runtime",
-  ],
 };
 
 export default nextConfig;

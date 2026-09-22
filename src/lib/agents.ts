@@ -1,4 +1,4 @@
-import { converse } from "./aws/bedrock";
+import { completeChat } from "./azure/openai";
 import { CONTROLS, FRAMEWORK_LABEL, toFinding } from "./frameworks";
 import { createId } from "./ids";
 import { retrieve } from "./rag";
@@ -111,7 +111,7 @@ async function runScout(input: {
     )
     .join("\n\n");
 
-  const llm = await converse({
+  const llm = await completeChat({
     system:
       "You are Scout, a regulation analyst for a governance copilot. Be concrete. Cite retrieved document titles. Do not claim this is a legal opinion. If context is thin, say what is missing.",
     user: `Org: ${input.orgName}\n${input.orgNotes}\n\nRecent federal items:\n${input.recentRegs.join("\n") || "(none)"}\n\nRetrieved context:\n${context || "(none)"}\n\nUser question:\n${input.query}`,
@@ -174,7 +174,7 @@ async function runAuditor(input: {
     docTitles: input.docTitles,
   });
 
-  const narrative = await converse({
+  const narrative = await completeChat({
     system:
       "You are Auditor. Rewrite the readiness memo in clear English. Keep every finding. Do not invent evidence. Label this as an internal memo, not a SOC/PCI attestation. Use markdown.",
     user: `${structured}\n\nScout notes (use for context, do not treat as org evidence):\n${input.scoutNotes}`,
