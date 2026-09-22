@@ -22,6 +22,8 @@ const NAV = [
 
 type Health = {
   azure: boolean;
+  aws: boolean;
+  knowledgeBase: boolean;
   documents: number;
 };
 
@@ -76,9 +78,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="rounded-xl border border-white/10 bg-white/4 px-3 py-3 text-xs text-slate-400">
           <p className="mb-1 font-medium text-slate-200">Retrieval</p>
           <p>
-            {health?.azure
-              ? "Azure OpenAI embeddings"
-              : "Local keyword RAG (add Azure OpenAI keys)"}
+            {health?.knowledgeBase
+              ? "AWS Bedrock Knowledge Base"
+              : health?.aws
+                ? "AWS Titan embeddings"
+                : health?.azure
+                  ? "Azure OpenAI embeddings"
+                  : "Local keyword RAG"}
           </p>
           <p className="mt-1">{health?.documents ?? "—"} documents indexed</p>
         </div>

@@ -18,7 +18,7 @@ A teammate should be able to:
 4. Get a saved audit-style memo they can open later
 5. Call the same pipeline from another app over HTTP
 
-The first cut is local-file storage + optional Azure OpenAI (chat + embeddings) so we can work together without standing up Postgres or Azure AI Search on day one.
+The first cut is local-file storage plus **Azure OpenAI for chat** and **AWS Bedrock for RAG** (Titan embeddings + optional Knowledge Base). You can run without either cloud; then retrieval is keyword-only and memos use the control catalog.
 
 ---
 
@@ -42,18 +42,19 @@ Think of Aegis as **four layers**, all inside one Next.js process. There is no s
 ┌──────────────────────────▼──────────────────────────────────┐
 │  Domain (src/lib)  ← most of the product lives here         │
 │  agents.ts     Scout + Auditor orchestration                │
-│  rag.ts        retrieve chunks (keyword / Azure embeddings) │
+│  rag.ts        retrieve (KB / Titan / Azure / keyword)      │
 │  frameworks.ts control catalog + gap scoring                │
 │  ingest.ts     chunk text + persist                         │
 │  store.ts      JSON files on disk                           │
-│  azure/*       Azure OpenAI chat + embeddings               │
+│  azure/*       Azure OpenAI chat (+ embeddings fallback)    │
+│  aws/*         Bedrock Titan + Knowledge Base retrieve      │
 │  regulations.ts Federal Register client                     │
 └──────────────────────────┬──────────────────────────────────┘
                            │
-          ┌────────────────┼────────────────┐
-          ▼                ▼                ▼
-   data/runtime/*.json   Azure OpenAI   Federal Register
-   (gitignored)          (optional)     (optional live API)
+          ┌────────────────┼────────────────┬─────────────────┐
+          ▼                ▼                ▼                 ▼
+   data/runtime/*.json  Azure OpenAI   AWS Bedrock     Federal Register
+   (gitignored)         chat           RAG (optional)  (optional live API)
 ```
 
 **Rule of thumb:** pages and API routes are thin. If you are changing *behavior* (how a report is scored, how RAG works, what an org looks like), you almost always want `src/lib/`, not a `page.tsx`.
@@ -78,19 +79,20 @@ Same functions are re-exported at `/api/v1/*` so another product can skip the UI
 | `src/app/api/v1/` | Thin wrappers around the same handlers, plus optional `x-api-key`. Integration surface. |
 | `src/components/` | Shared UI: shell, chat, markdown renderer, status badges. Client components (`"use client"`). |
 | `src/lib/` | The product: agents, RAG, store, types, seed. Importable from API routes (Node runtime). |
-| `src/lib/azure/` | Azure OpenAI client only. Easy to stub or swap. |
+| `src/lib/azure/` | Azure OpenAI chat (GPT). Embeddings if AWS is not set. |
+| `src/lib/aws/` | Bedrock Titan embeddings + Knowledge Base retrieve. No Claude. |
 | `src/lib/types.ts` | Shared TypeScript types. UI, API, and store all import this. Change it first. |
 | `data/runtime/` | Live JSON store created on first boot. Gitignored. Each teammate has their own. |
 | `src/lib/seed.ts` | Demo org (Northstar Payments) copied into `data/runtime/` when that folder is empty. |
 | `.env.example` | Documented env vars. Copy to `.env.local` (also gitignored). |
-| `next.config.ts` | Pins Turbopack root to this repo. |
+| `next.config.ts` | Marks AWS SDK as server-external. Pins Turbopack root to this repo. |
 
 Full tree:
 
 ```
 Agentic-AI-Governance-Agent/
 ├── README.md
-├── package.json              Next + React + openai (Azure) + zod + lucide
+├── package.json              Next + React + openai + AWS SDK + zod
 ├── next.config.ts
 ├── tsconfig.json             @/* → ./src/*
 ├── .env.example
@@ -116,7 +118,7 @@ Agentic-AI-Governance-Agent/
     │       ├── health/route.ts
     │       └── v1/{chat,ingest,reports}/route.ts
     ├── components/
-    │   ├── app-shell.tsx     nav + Azure/local RAG badge
+    │   ├── app-shell.tsx     nav + Azure/AWS/local RAG badge
     │   ├── chat-panel.tsx    streaming chat
     │   ├── markdown.tsx      tiny markdown (headings, lists, bold)
     │   └── status-badge.tsx
@@ -131,9 +133,14 @@ Agentic-AI-Governance-Agent/
         ├── regulations.ts
         ├── http.ts           API key helper
         ├── ids.ts
-        └── azure/
+        ├── embeddings.ts     Titan first, else Azure
+        ├── azure/
+        │   ├── config.ts
+        │   └── openai.ts     chat.completions + embeddings fallback
+        └── aws/
             ├── config.ts
-            └── openai.ts     chat.completions + embeddings
+            ├── embeddings.ts Titan InvokeModel
+            └── knowledge-base.ts RetrieveCommand
 ```
 
 ---
@@ -146,7 +153,7 @@ Agentic-AI-Governance-Agent/
 
 **Why:** One repo for UI and API. Teammates run `npm run dev` and get pages + `/api/*` on the same origin (no CORS fight). App Router matches how we want URLs: `/reports/[id]`, `/api/v1/chat`. We also want a copilot that streams; Route Handlers can return a `ReadableStream`.
 
-**How:** `src/app/**/page.tsx` are screens. Most are `"use client"` because they fetch and hold form/chat state. API routes set `export const runtime = "nodejs"` because they use `fs` and the OpenAI SDK (not Edge). `@/*` path alias → `src/*`.
+**How:** `src/app/**/page.tsx` are screens. Most are `"use client"` because they fetch and hold form/chat state. API routes set `export const runtime = "nodejs"` because they use `fs`, the OpenAI SDK, and the AWS SDK (not Edge). `@/*` path alias → `src/*`.
 
 ### React 19
 
@@ -202,17 +209,33 @@ This is **not** safe for multiple server instances. Fine for `next dev`.
 
 **What:** Microsoft-hosted OpenAI models (GPT-4o, etc.) behind an Azure resource. Same Chat Completions API as OpenAI, different endpoint and **deployment names**.
 
-**Why:** This is the model stack the team uses. Keys, region, and content filters stay in Azure. We do not use Claude or Amazon Bedrock.
+**Why:** This is the chat model the team uses. Scout and Auditor generate prose here. We do **not** use Claude on Bedrock for chat.
 
-**How:** Official `openai` npm package with `AzureOpenAI` in `src/lib/azure/openai.ts`. `completeChat()` sends a system + user message via `chat.completions.create`. The `model` field is the **Azure deployment name** (`AZURE_OPENAI_DEPLOYMENT`), not `gpt-4o` unless you named the deployment that. If endpoint/key are missing, it returns `null` and agents use a template fallback so the demo still runs.
+**How:** Official `openai` npm package with `AzureOpenAI` in `src/lib/azure/openai.ts`. `completeChat()` sends a system + user message via `chat.completions.create`. The `model` field is the **Azure deployment name** (`AZURE_OPENAI_DEPLOYMENT`). If endpoint/key are missing, it returns `null` and agents use a template fallback so the demo still runs.
 
-### Azure OpenAI embeddings
+### AWS Bedrock Knowledge Bases (RAG)
 
-**What:** A second Azure deployment, typically `text-embedding-3-small` or `text-embedding-ada-002`.
+**What:** Managed RAG on AWS. Documents live in S3 (or another KB source); Bedrock chunks, embeds, and retrieves.
 
-**Why:** RAG needs a vector per chunk. Same Azure resource as chat, so one set of credentials. Vectors are stored on the chunk in `chunks.json`.
+**Why:** This is the AWS RAG path. When `BEDROCK_KNOWLEDGE_BASE_ID` is set, retrieve hits the KB instead of only local JSON.
 
-**How:** `embeddings.create` in `openai.ts`. `rag.ts` embeds new chunks on ingest and, at query time, embeds the question then **cosine-similarity** vs stored vectors. Mixed with a keyword score (`0.72` semantic + `0.28` keyword) when vectors exist. If you previously ingested under a different embedding model, delete `data/runtime/` and re-index so dimensions match.
+**How:** `@aws-sdk/client-bedrock-agent-runtime` `RetrieveCommand` in `src/lib/aws/knowledge-base.ts`. `rag.ts` merges KB hits with local chunks, de-dupes, takes top k.
+
+### Amazon Titan embeddings (Bedrock)
+
+**What:** Bedrock embedding model (`amazon.titan-embed-text-v2:0`), 256-d normalized vectors.
+
+**Why:** Local RAG still needs vectors when you have not stood up a Knowledge Base yet. Titan stays in the same AWS account as the KB.
+
+**How:** `InvokeModel` in `src/lib/aws/embeddings.ts`. Used first when AWS keys exist (`src/lib/embeddings.ts`). `rag.ts` cosine-similarities vs `chunks.json`, mixed with keyword score (`0.72` semantic + `0.28` keyword).
+
+### Azure OpenAI embeddings (fallback)
+
+**What:** A second Azure deployment, typically `text-embedding-3-small`.
+
+**Why:** If AWS is not configured, we still want semantic search using the Azure resource you already have for chat.
+
+**How:** `embeddings.create` in `azure/openai.ts`, only if Titan did not run. Do not mix Titan and Azure vectors in the same `chunks.json` — pick one path and delete `data/runtime/` if you switch.
 
 ### RAG (our code, not a library)
 
@@ -222,10 +245,11 @@ This is **not** safe for multiple server instances. Fine for `next dev`.
 
 **How:** Ingest splits text (~900 chars, 140 overlap) in `store.chunkDocument`. Retrieve in `rag.ts`:
 
-1. Local cosine search if Azure embeddings ran
-2. Else keyword overlap (works with no Azure keys)
+1. Bedrock Knowledge Base, if `BEDROCK_KNOWLEDGE_BASE_ID` is set
+2. Local cosine search via Titan (AWS) or Azure embeddings
+3. Keyword overlap if neither cloud is configured
 
-Scout gets retrieved chunks. Auditor scores against the **full org corpus** (policies/evidence/controls), not regulation chunks. Azure AI Search can replace the JSON vector store later without changing agent prompts.
+Scout gets retrieved chunks. Auditor scores against the **full org corpus** (policies/evidence/controls), not regulation chunks.
 
 ### Two agents (Scout + Auditor)
 
@@ -301,7 +325,8 @@ Seed tenant: **Northstar Payments** in `src/lib/seed.ts`.
 User message or “generate report”
         │
         ▼
-   retrieve()   ← local chunks (keyword, or Azure embeddings)
+   retrieve()   ← Bedrock KB (if set)
+                ← local chunks (Titan, Azure embeddings, or keyword)
         │
         ▼
    Scout        ← obligations + citations (Azure OpenAI if configured,
@@ -380,7 +405,7 @@ If `AEGIS_API_KEY` is set, v1 routes require header `x-api-key`. App routes do n
 
 | Method | Path | Body / notes |
 |---|---|---|
-| GET | `/api/health` | `{ azure, documents, chunks, reports, embeddings }` |
+| GET | `/api/health` | `{ azure, aws, knowledgeBase, documents, chunks, reports, embeddings }` |
 | GET / PUT | `/api/org` | PUT partial org snapshot |
 | GET | `/api/documents` | all indexed docs |
 | POST | `/api/ingest` | JSON or `multipart/form-data` (`file`, `title`, `kind`, `text`) |
@@ -415,7 +440,7 @@ Uploads: `.txt` / `.md` only. PDF is not wired yet.
 git clone <this-repo>
 cd Agentic-AI-Governance-Agent
 npm install
-cp .env.example .env.local   # optional; app runs without Azure OpenAI
+cp .env.example .env.local   # optional; app runs without Azure or AWS
 npm run dev
 ```
 
@@ -428,24 +453,35 @@ npm run build
 
 Node 22 is what we used. Scripts: `dev`, `build`, `start`, `lint`.
 
-### Azure OpenAI (optional)
+### Azure OpenAI + AWS Bedrock (optional)
 
-Without keys, retrieval is keyword search over local chunks, and Scout/Auditor use the control catalog fallback. That is enough to demo.
+Without keys, retrieval is keyword search and Scout/Auditor use the control catalog. That is enough to demo.
 
-With keys:
+**Chat (Azure)**
 
 1. Copy `.env.example` → `.env.local`
-2. In Azure AI Foundry / Azure OpenAI, create a resource
-3. Deploy a chat model (e.g. GPT-4o) and an embedding model (e.g. text-embedding-3-small)
-4. Put the resource endpoint, API key, and **deployment names** in `.env.local`
+2. In Azure AI Foundry, deploy a chat model (e.g. GPT-4o)
+3. Set `AZURE_OPENAI_ENDPOINT`, `AZURE_OPENAI_API_KEY`, and `AZURE_OPENAI_DEPLOYMENT` (the **deployment name**)
+
+**RAG (AWS Bedrock)**
+
+1. Set `AWS_REGION` + `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (or `AWS_BEARER_TOKEN_BEDROCK`)
+2. In the Bedrock console, enable Titan Embeddings V2
+3. Optional: create a Knowledge Base and set `BEDROCK_KNOWLEDGE_BASE_ID`
+4. If you are not using AWS yet, set `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` so Azure embeddings back local RAG
 
 | Variable | Purpose |
 |---|---|
-| `AZURE_OPENAI_ENDPOINT` | `https://YOUR_RESOURCE.openai.azure.com` (no trailing slash required) |
+| `AZURE_OPENAI_ENDPOINT` | `https://YOUR_RESOURCE.openai.azure.com` |
 | `AZURE_OPENAI_API_KEY` | Azure OpenAI key |
 | `AZURE_OPENAI_API_VERSION` | default `2024-10-21` |
 | `AZURE_OPENAI_DEPLOYMENT` | chat deployment name |
-| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | embedding deployment name |
+| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | Azure embeddings if AWS is off |
+| `AWS_REGION` | default `us-east-1` |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN` | SigV4 |
+| `AWS_BEARER_TOKEN_BEDROCK` | Bedrock API key, if you use that instead |
+| `BEDROCK_EMBEDDING_MODEL_ID` | Titan embeddings (default v2) |
+| `BEDROCK_KNOWLEDGE_BASE_ID` | managed AWS RAG |
 | `AEGIS_API_KEY` | lock `/api/v1/*` |
 
 Do not commit `.env.local`.
@@ -466,8 +502,8 @@ Suggested split:
 
 | Area | Files |
 |---|---|
-| Chat / agents | `src/lib/agents.ts`, `src/components/chat-panel.tsx`, `src/app/api/chat` |
-| RAG / Azure | `src/lib/rag.ts`, `src/lib/azure/*`, `src/lib/ingest.ts` |
+| Chat / Azure | `src/lib/agents.ts`, `src/lib/azure/*`, `src/components/chat-panel.tsx` |
+| RAG / AWS | `src/lib/rag.ts`, `src/lib/aws/*`, `src/lib/embeddings.ts`, `src/lib/ingest.ts` |
 | Frameworks / scoring | `src/lib/frameworks.ts` |
 | Org + ingest UI | `src/app/org`, `src/app/regulations` |
 | Reports UI | `src/app/reports` |
@@ -484,4 +520,4 @@ Suggested split:
 - Federal Register falls back to three demo items if the live API fails
 - Reports are internal memos only
 
-Reasonable next steps: PDF ingest, Postgres or Azure AI Search, auth, evidence binders, and plugging `/api/v1` into another product.
+Reasonable next steps: PDF ingest, Postgres or Bedrock KB as the only store, auth, evidence binders, and plugging `/api/v1` into another product.

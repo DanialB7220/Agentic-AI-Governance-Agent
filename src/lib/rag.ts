@@ -1,4 +1,5 @@
-import { embedTexts } from "./azure/openai";
+import { embedTexts } from "./embeddings";
+import { retrieveFromKnowledgeBase } from "./aws/knowledge-base";
 import { listChunks, saveChunks } from "./store";
 import type { Chunk, RetrievedChunk } from "./types";
 
@@ -43,7 +44,21 @@ export async function retrieve(
   query: string,
   k = 8,
 ): Promise<RetrievedChunk[]> {
-  return retrieveLocal(query, k);
+  const [local, kb] = await Promise.all([
+    retrieveLocal(query, k),
+    retrieveFromKnowledgeBase(query, k).catch(() => null),
+  ]);
+  const merged = [...(kb ?? []), ...local];
+  const seen = new Set<string>();
+  return merged
+    .filter((item) => {
+      const key = item.chunk.text.slice(0, 80);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, k);
 }
 
 async function retrieveLocal(query: string, k: number): Promise<RetrievedChunk[]> {

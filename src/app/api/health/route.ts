@@ -1,3 +1,4 @@
+import { awsConfigured, knowledgeBaseId } from "@/lib/aws/config";
 import { azureConfigured } from "@/lib/azure/config";
 import { listChunks, listDocuments, listReports } from "@/lib/store";
 
@@ -11,6 +12,8 @@ export async function GET() {
   ]);
   return Response.json({
     azure: azureConfigured(),
+    aws: awsConfigured(),
+    knowledgeBase: Boolean(knowledgeBaseId()),
     documents: documents.length,
     chunks: chunks.length,
     reports: reports.length,
