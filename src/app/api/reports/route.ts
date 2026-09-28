@@ -12,7 +12,7 @@ export async function GET() {
 }
 
 const Body = z.object({
-  frameworks: z.array(z.enum(FRAMEWORKS)).min(1).max(4).optional(),
+  frameworks: z.array(z.enum(FRAMEWORKS)).min(1).max(5).optional(),
 });
 
 export async function POST(req: Request) {
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
   if (!parsed.success) return jsonError("Invalid report payload.");
   try {
     const report = await generateStandaloneReport(
-      parsed.data.frameworks ?? ["soc2", "pci-dss"],
+      parsed.data.frameworks ?? ["cms-ma-pd"],
     );
     return Response.json({ report });
   } catch (err) {

@@ -2,7 +2,7 @@
   "name": "aegis-governance",
   "version": "0.1.0",
   "private": true,
-  "description": "Governance copilot: RAG over org policies and new regulations, with SOC 2 / PCI readiness memos.",
+  "description": "Governance copilot: CMS-4208-F3 vs Johnson & Johnson policies. OpenAI API here; Azure OpenAI for the client.",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

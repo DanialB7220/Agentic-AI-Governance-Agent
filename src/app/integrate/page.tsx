@@ -3,10 +3,10 @@ export default function IntegratePage() {
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Integrate later</h1>
       <p className="mt-2 text-sm leading-6 text-slate-400">
-        Same agents, RAG, and reports over HTTP. Set <code>AEGIS_API_KEY</code>{" "}
-        and send it as <code>x-api-key</code>. These routes are thin aliases of
-        the app APIs so another product can ingest a policy or request a memo
-        without the UI.
+        Same agents, RAG, and reports over HTTP. This repo chats with the public
+        OpenAI API; J&amp;J production should send the same requests after flipping
+        to Azure OpenAI. Set <code>AEGIS_API_KEY</code> and send it as{" "}
+        <code>x-api-key</code>.
       </p>
 
       <section className="mt-8 space-y-6 text-sm">
@@ -17,7 +17,7 @@ export default function IntegratePage() {
   "title": "Access policy",
   "kind": "policy",
   "text": "…",
-  "framework": "soc2"
+  "framework": "cms-ma-pd"
 }`}
         />
         <Endpoint
@@ -26,7 +26,7 @@ export default function IntegratePage() {
           body={`{
   "mode": "report",
   "messages": [
-    { "role": "user", "content": "PCI DSS gap report for our org" }
+    { "role": "user", "content": "CMS-4208-F3 gap report for J&J" }
   ]
 }`}
           note="NDJSON stream: status, delta, report, done"
@@ -34,7 +34,7 @@ export default function IntegratePage() {
         <Endpoint
           method="POST"
           path="/api/v1/reports"
-          body={`{ "frameworks": ["soc2", "pci-dss"] }`}
+          body={`{ "frameworks": ["cms-ma-pd"] }`}
         />
         <Endpoint method="GET" path="/api/v1/reports" body="" />
       </section>

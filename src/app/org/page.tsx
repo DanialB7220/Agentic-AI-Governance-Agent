@@ -4,7 +4,13 @@ import { FormEvent, useEffect, useState } from "react";
 import { FRAMEWORK_LABEL } from "@/lib/frameworks";
 import type { FrameworkId, OrgProfile, StoredDocument } from "@/lib/types";
 
-const ALL_FRAMEWORKS: FrameworkId[] = ["soc2", "pci-dss", "gdpr", "nist-csf"];
+const ALL_FRAMEWORKS: FrameworkId[] = [
+  "cms-ma-pd",
+  "soc2",
+  "pci-dss",
+  "gdpr",
+  "nist-csf",
+];
 
 export default function OrgPage() {
   const [org, setOrg] = useState<OrgProfile | null>(null);
@@ -49,8 +55,8 @@ export default function OrgPage() {
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Organization</h1>
       <p className="mt-2 text-sm text-slate-400">
-        This is the snapshot Scout and Auditor compare new rules against. Keep it
-        honest and short.
+        This is the snapshot Scout and Auditor compare CMS-4208-F3 against.
+        Replace the demo stand-in SOPs with J&amp;J’s real (redacted) policies.
       </p>
 
       <form onSubmit={onSubmit} className="mt-8 grid gap-4">

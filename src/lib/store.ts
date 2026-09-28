@@ -6,6 +6,20 @@ import type { Chunk, OrgProfile, Report, StoredDocument } from "./types";
 
 const DIR = path.join(process.cwd(), "data", "runtime");
 
+const LEGACY_DEMO_IDS = new Set([
+  "doc_access_policy",
+  "doc_encryption",
+  "doc_vendor",
+  "doc_incident",
+  "doc_new_pci",
+]);
+
+function isKeepDocument(doc: StoredDocument) {
+  if (LEGACY_DEMO_IDS.has(doc.id) || doc.id.startsWith("fr_demo_")) return false;
+  if (seedDocuments.some((s) => s.id === doc.id)) return true;
+  return doc.source === "upload" || doc.source === "federal-register";
+}
+
 type StoreShape = {
   org: OrgProfile;
   documents: StoredDocument[];
@@ -72,10 +86,28 @@ export async function loadStore(): Promise<StoreShape> {
       [],
     );
 
-    if (documents.length === 0) {
-      documents = seedDocuments;
-      chunks = seedDocuments.flatMap(chunkDocument);
-      memory = { org, documents, chunks, reports, seenRegulationIds };
+    const orgIsLegacy = !org.name.toLowerCase().includes("johnson");
+    const byId = new Map(
+      documents.filter(isKeepDocument).map((d) => [d.id, d]),
+    );
+    for (const doc of seedDocuments) byId.set(doc.id, doc);
+    const nextDocs = [...byId.values()];
+    const nextOrg = orgIsLegacy ? seedOrg : org;
+    const idsChanged =
+      nextDocs.length !== documents.length ||
+      nextDocs.some((d) => !documents.find((x) => x.id === d.id));
+    const missingSeed = seedDocuments.some(
+      (s) => !documents.find((d) => d.id === s.id),
+    );
+
+    if (orgIsLegacy || idsChanged || missingSeed) {
+      memory = {
+        org: nextOrg,
+        documents: nextDocs,
+        chunks: nextDocs.flatMap(chunkDocument),
+        reports,
+        seenRegulationIds,
+      };
       await persist(memory);
       return memory;
     }

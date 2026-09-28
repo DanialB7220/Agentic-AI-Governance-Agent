@@ -1,4 +1,4 @@
-import { completeChat } from "./azure/openai";
+import { completeChat } from "./llm/openai";
 import { CONTROLS, FRAMEWORK_LABEL, toFinding } from "./frameworks";
 import { createId } from "./ids";
 import { retrieve } from "./rag";
@@ -14,7 +14,7 @@ import type {
 } from "./types";
 
 const AUDIT_RE =
-  /\b(report|audit|gap|implement|roadmap|readiness|soc\s*2|pci|gdpr|nist|keep up|what to do)\b/i;
+  /\b(report|audit|gap|implement|roadmap|readiness|soc\s*2|pci|gdpr|nist|keep up|what to do|cms|medicare|part d|manufacturer discount|j&j|jnj)\b/i;
 
 export async function* runCopilot(input: {
   messages: { role: "user" | "assistant"; content: string }[];
@@ -137,7 +137,7 @@ async function runScout(input: {
       ? `What we already have on file:\n${bullets.join("\n")}`
       : "No matching org documents yet. Upload policies or a regulation to ground this.",
     "",
-    "Ask me to **run a gap report** (SOC 2, PCI DSS, or GDPR) and Auditor will score controls, list gaps, and give a 30/60/90-day plan. This is an internal readiness memo, not an attestation.",
+    "Ask me to **run a gap report** (CMS MA/Part D, SOC 2) and Auditor will score controls, list gaps, and give a 30/60/90-day plan. This is an internal readiness memo, not an attestation or CMS filing.",
   ].join("\n");
 }
 
@@ -176,7 +176,7 @@ async function runAuditor(input: {
 
   const narrative = await completeChat({
     system:
-      "You are Auditor. Rewrite the readiness memo in clear English. Keep every finding. Do not invent evidence. Label this as an internal memo, not a SOC/PCI attestation. Use markdown.",
+      "You are Auditor. Rewrite the readiness memo in clear English. Keep every finding. Do not invent evidence. Label this as an internal memo, not a CMS filing, SOC attestation, or legal opinion. Use markdown. For Johnson & Johnson, treat the org as a manufacturer / plan partner, not an MA organization, unless the org notes say otherwise.",
     user: `${structured}\n\nScout notes (use for context, do not treat as org evidence):\n${input.scoutNotes}`,
     maxTokens: 1800,
   });
@@ -218,12 +218,14 @@ export async function generateStandaloneReport(frameworks: FrameworkId[]) {
 
 function inferFrameworks(query: string, org: FrameworkId[]): FrameworkId[] {
   const hit: FrameworkId[] = [];
+  if (/\bcms|medicare|part d|manufacturer discount|ssbci|star ratings\b/i.test(query))
+    hit.push("cms-ma-pd");
   if (/\bsoc\b/i.test(query)) hit.push("soc2");
   if (/\bpci\b/i.test(query)) hit.push("pci-dss");
   if (/\bgdpr|privacy\b/i.test(query)) hit.push("gdpr");
   if (/\bnist\b/i.test(query)) hit.push("nist-csf");
   const unique = [...new Set(hit.length ? hit : org)];
-  return unique.length ? unique : ["soc2"];
+  return unique.length ? unique : ["cms-ma-pd"];
 }
 
 function buildRoadmap(findings: GapFinding[]): RoadmapItem[] {
@@ -280,7 +282,7 @@ function renderReport(input: {
     `**Asked:** ${input.query}`,
     `**Coverage (heuristic):** ${input.coveragePct}% of scored controls have supporting language on file.`,
     "",
-    "> This is an internal readiness memo. It is not a SOC 2 attestation, PCI ROC, or legal advice.",
+    "> This is an internal readiness memo. It is not a CMS filing, SOC 2 attestation, PCI ROC, or legal advice.",
     "",
     "## Org snapshot",
     input.orgNotes,

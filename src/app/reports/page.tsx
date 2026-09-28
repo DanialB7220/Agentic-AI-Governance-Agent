@@ -26,7 +26,7 @@ export default function ReportsPage() {
     const res = await fetch("/api/reports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ frameworks: ["soc2", "pci-dss"] }),
+      body: JSON.stringify({ frameworks: ["cms-ma-pd"] }),
     });
     const json = await res.json();
     setBusy(false);
@@ -43,8 +43,8 @@ export default function ReportsPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Reports</h1>
           <p className="mt-2 text-sm text-slate-400">
-            Internal readiness memos. Not a SOC attestation, PCI ROC, or legal
-            opinion.
+            Internal readiness memos. Not a CMS filing, SOC attestation, PCI ROC,
+            or legal opinion.
           </p>
         </div>
         <button
@@ -53,7 +53,7 @@ export default function ReportsPage() {
           disabled={busy}
           className="h-10 cursor-pointer rounded-xl bg-amber-500 px-4 text-sm font-medium text-slate-950 hover:bg-amber-400 disabled:opacity-40"
         >
-          {busy ? "Scoring…" : "New SOC 2 + PCI memo"}
+          {busy ? "Scoring…" : "New CMS MA/Part D memo"}
         </button>
       </div>
       {error && <p className="mt-3 text-sm text-rose-300">{error}</p>}

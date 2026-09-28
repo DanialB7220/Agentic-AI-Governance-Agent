@@ -1,5 +1,6 @@
 import { awsConfigured, knowledgeBaseId } from "@/lib/aws/config";
 import { azureConfigured } from "@/lib/azure/config";
+import { openaiConfigured } from "@/lib/llm/config";
 import { listChunks, listDocuments, listReports } from "@/lib/store";
 
 export const runtime = "nodejs";
@@ -10,8 +11,12 @@ export async function GET() {
     listChunks(),
     listReports(),
   ]);
+  const openai = openaiConfigured();
+  const azure = azureConfigured();
   return Response.json({
-    azure: azureConfigured(),
+    openai,
+    azure,
+    chat: openai ? "openai" : azure ? "azure" : "offline",
     aws: awsConfigured(),
     knowledgeBase: Boolean(knowledgeBaseId()),
     documents: documents.length,

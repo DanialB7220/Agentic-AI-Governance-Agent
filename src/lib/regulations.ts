@@ -2,11 +2,12 @@ import { getSeenRegulationIds, listDocuments, markRegulationsSeen } from "./stor
 import type { RegulationFeedItem } from "./types";
 
 const AGENCIES = [
+  "centers-for-medicare-medicaid-services",
+  "department-of-health-and-human-services",
   "federal-trade-commission",
   "consumer-financial-protection-bureau",
   "securities-and-exchange-commission",
   "office-of-the-comptroller-of-the-currency",
-  "department-of-health-and-human-services",
 ];
 
 type FrDoc = {
@@ -71,6 +72,18 @@ function fallbackFeed(
   ingested: Set<string>,
 ): RegulationFeedItem[] {
   const items: RegulationFeedItem[] = [
+    {
+      id: "fr_2026_06600",
+      title:
+        "CMS-4208-F3 / CMS-4212-F: CY2027 Medicare Advantage, Part D, and Cost Plan final rule",
+      abstract:
+        "Final rule (91 FR 17384). Effective June 1, 2026; coverage January 1, 2027; CY2027 marketing from October 1, 2026. Codifies IRA Part D redesign, sunsets Coverage Gap Discount Program, adds 42 CFR 423 subpart AA Manufacturer Discount Program, TrOOP, insulin/vaccine cost sharing, Star Ratings, SSBCI, and enrollment changes.",
+      url: "https://www.govinfo.gov/content/pkg/FR-2026-04-06/pdf/2026-06600.pdf",
+      publishedAt: "2026-04-06",
+      agency: "Centers for Medicare & Medicaid Services",
+      type: "Rule",
+      ingested: ingested.has("fr_2026_06600"),
+    },
     {
       id: "fr_demo_ftc_ai",
       title:

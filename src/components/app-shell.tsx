@@ -7,6 +7,7 @@ import {
   BookOpen,
   Building2,
   FileBarChart,
+  ListChecks,
   MessageSquare,
   Plug,
   Shield,
@@ -14,6 +15,7 @@ import {
 
 const NAV = [
   { href: "/", label: "Copilot", icon: MessageSquare },
+  { href: "/workstream", label: "Workstream", icon: ListChecks },
   { href: "/regulations", label: "Regulations", icon: BookOpen },
   { href: "/org", label: "Organization", icon: Building2 },
   { href: "/reports", label: "Reports", icon: FileBarChart },
@@ -21,10 +23,12 @@ const NAV = [
 ];
 
 type Health = {
+  openai: boolean;
   azure: boolean;
   aws: boolean;
   knowledgeBase: boolean;
   documents: number;
+  chat?: string;
 };
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -76,15 +80,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="rounded-xl border border-white/10 bg-white/4 px-3 py-3 text-xs text-slate-400">
-          <p className="mb-1 font-medium text-slate-200">Retrieval</p>
+          <p className="mb-1 font-medium text-slate-200">Chat</p>
+          <p>
+            {health?.openai
+              ? "OpenAI API (this project)"
+              : health?.azure
+                ? "Azure OpenAI (J&J)"
+                : "Template fallback"}
+          </p>
+          <p className="mt-3 mb-1 font-medium text-slate-200">Retrieval</p>
           <p>
             {health?.knowledgeBase
               ? "AWS Bedrock Knowledge Base"
               : health?.aws
                 ? "AWS Titan embeddings"
-                : health?.azure
-                  ? "Azure OpenAI embeddings"
-                  : "Local keyword RAG"}
+                : health?.openai
+                  ? "OpenAI embeddings"
+                  : health?.azure
+                    ? "Azure OpenAI embeddings"
+                    : "Local keyword RAG"}
           </p>
           <p className="mt-1">{health?.documents ?? "—"} documents indexed</p>
         </div>

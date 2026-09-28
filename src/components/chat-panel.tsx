@@ -8,24 +8,24 @@ import type { ChatEvent, DocumentKind, Report } from "@/lib/types";
 
 const STARTERS = [
   {
-    title: "What’s new in the feed?",
+    title: "CMS-4208-F3 vs J&J",
     prompt:
-      "What new government regulations or proposed rules should Northstar Payments care about, and why?",
+      "Analyze CMS-4208-F3 / CMS-4212-F (CY2027 MA and Part D final rule) against Johnson & Johnson’s current policies. Gap report and 30/60/90 plan. Focus Manufacturer Discount Program, TrOOP, insulin/vaccines, and marketing dates.",
   },
   {
-    title: "PCI 4.0 gap report",
+    title: "Manufacturer Discount Program",
     prompt:
-      "Run a PCI DSS gap report against our current org documents. Tell us what to implement in 30/60/90 days.",
+      "What does J&J still have to change to leave Coverage Gap Discount Program operations and run 42 CFR 423 subpart AA Manufacturer Discount Program, including selected drugs during MFP periods?",
   },
   {
-    title: "SOC 2 readiness memo",
+    title: "Oct 1, 2026 marketing gate",
     prompt:
-      "Draft a SOC 2 Type I readiness memo. What do we already cover, what’s missing, and what would an auditor ask for next?",
+      "CY2027 marketing and communications apply beginning October 1, 2026. What is missing in our MLR SOP and what should we do before AEP creative locks?",
   },
   {
     title: "Keep us current",
     prompt:
-      "Given our org and the latest ingested regulations, what should we do this quarter to keep up? Skip a full TLC-style program — prioritize SOC 2 and PCI.",
+      "Given J&J’s org snapshot and the ingested CMS final rule, what should market access, hub, and MLR do this quarter to stay compliant? Not a full TLC program.",
   },
 ];
 
@@ -131,8 +131,9 @@ export function ChatPanel({
             See how a new rule lands on your org, then get a plan.
           </h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">
-            Scout reads regulations. Auditor maps them to SOC 2 / PCI (not a full
-            TLC program) and writes an internal readiness memo.
+            Scout reads CMS-4208-F3 and your current SOPs. Auditor maps them to
+            J&amp;J manufacturer workflows (not a full TLC program) and writes an
+            internal readiness memo.
           </p>
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
             {STARTERS.map((s) => (

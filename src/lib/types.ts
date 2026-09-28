@@ -1,4 +1,10 @@
-export const FRAMEWORKS = ["soc2", "pci-dss", "gdpr", "nist-csf"] as const;
+export const FRAMEWORKS = [
+  "soc2",
+  "pci-dss",
+  "gdpr",
+  "nist-csf",
+  "cms-ma-pd",
+] as const;
 export type FrameworkId = (typeof FRAMEWORKS)[number];
 
 export const DOCUMENT_KINDS = [
