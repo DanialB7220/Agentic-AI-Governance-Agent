@@ -1,316 +1,237 @@
-export type WorkstreamItem = {
+export type TicketPriority = "do-first" | "do-next" | "later";
+export type TicketStatus = "todo" | "done";
+
+export type Ticket = {
   id: string;
-  owner: string;
-  window: string;
+  priority: TicketPriority;
+  status: TicketStatus;
   title: string;
-  detail: string;
+  what: string;
+  where: string;
+  doneWhen: string[];
 };
 
-export type WorkstreamGroup = {
+export type TicketGroup = {
   id: string;
   title: string;
-  blurb: string;
-  items: WorkstreamItem[];
+  tickets: Ticket[];
 };
 
-/** Demo-readiness backlog. Keep in sync with ACTION-ITEMS.md. */
-export const WORKSTREAMS: WorkstreamGroup[] = [
+/** Keep in sync with ACTION-ITEMS.md. */
+export const EPICS: TicketGroup[] = [
   {
-    id: "intent",
-    title: "What this demo is",
-    blurb:
-      "Corporate-looking showcase for J&J × CMS-4208-F3. Not a production GRC platform and not a real J&J implementation.",
-    items: [
+    id: "already",
+    title: "Already built — do not rebuild",
+    tickets: [
       {
-        id: "intent-1",
-        owner: "Presenter",
-        window: "Before the room",
-        title: "Say the pitch in one breath",
-        detail:
-          "New CMS rule drops. We already have the company’s mock policies. Scout explains the rule. Auditor diffs it against those policies and writes a 30/60/90 memo. Later the same HTTP API could sit next to PolicyTech / Veeva. This build is the idea, with fake SOPs.",
+        id: "AEGIS-1",
+        priority: "do-first",
+        status: "done",
+        title: "Fake J&J company + fake internal policies",
+        what: "When the app starts, it already pretends to be Johnson & Johnson and loads fake old policies (so the bot has something to compare).",
+        where: "src/lib/seed.ts",
+        doneWhen: ["App boots as J&J with several fake policies."],
       },
       {
-        id: "intent-2",
-        owner: "Presenter",
-        window: "Before the room",
-        title: "Say what it is not",
-        detail:
-          "Not a CMS filing, not legal advice, not live J&J data, not SSO, not SAP. Coverage % is keyword overlap so the demo works offline. If someone asks “is this production?” — no, this is the prototype that proves the loop.",
+        id: "AEGIS-2",
+        priority: "do-first",
+        status: "done",
+        title: "Short write-up of the CMS rule is in the app",
+        what: "A summary of the government PDF is already stored as a “regulation” document.",
+        where: "src/lib/seed.ts",
+        doneWhen: ["CMS-4208-F3 shows up in Organization documents."],
       },
       {
-        id: "intent-3",
-        owner: "Engineering",
-        window: "Now",
-        title: "Keep the tenant looking like J&J",
-        detail:
-          "Org name, industry, notes, and seed SOPs should read as Innovative Medicine / market access — not a payments processor leftover. Wipe data/runtime if old Northstar docs come back.",
+        id: "AEGIS-6",
+        priority: "do-first",
+        status: "done",
+        title: "Chat uses OpenAI (this project)",
+        what: "Scout and Auditor already call the public OpenAI API if you put a key in .env.local.",
+        where: "src/lib/llm/openai.ts",
+        doneWhen: ["With OPENAI_API_KEY, the chatbot writes real sentences."],
+      },
+      {
+        id: "AEGIS-9",
+        priority: "do-first",
+        status: "done",
+        title: "Search over our saved documents",
+        what: "The app already finds relevant policy text (simple word match if there is no AWS/OpenAI).",
+        where: "src/lib/rag.ts",
+        doneWhen: ["Chat still works with no cloud keys."],
+      },
+      {
+        id: "AEGIS-13",
+        priority: "do-first",
+        status: "done",
+        title: "Chat page + saved memos",
+        what: "Home chat and Reports page already exist. The yellow starter “CMS-4208-F3 vs J&J” already makes a memo.",
+        where: "src/components/chat-panel.tsx, src/app/reports",
+        doneWhen: ["Clicking the starter saves a report."],
+      },
+      {
+        id: "AEGIS-17",
+        priority: "do-next",
+        status: "done",
+        title: "HTTP API for other apps later",
+        what: "Other tools can already call /api/v1/chat and /api/v1/ingest. Curl examples are on Integrate.",
+        where: "src/app/api/v1, src/app/integrate",
+        doneWhen: ["Integrate page shows working example commands."],
       },
     ],
   },
   {
-    id: "local",
-    title: "Get the app running on a laptop",
-    blurb: "No clouds required for a keyword-only walkthrough.",
-    items: [
+    id: "must",
+    title: "Must code for a good demo",
+    tickets: [
       {
-        id: "local-1",
-        owner: "Engineering",
-        window: "Now",
-        title: "Install and boot",
-        detail:
-          "Node 22. npm install && cp .env.example .env.local && npm run dev. Open http://localhost:3000. Confirm Copilot, Workstream, Org, Reports, Integrate all load.",
+        id: "AEGIS-3",
+        priority: "do-first",
+        status: "todo",
+        title: "Let people upload the real CMS PDF",
+        what: "Right now you can only upload .txt or .md. Add code that reads a PDF and saves the text, so someone can drop in 2026-06600.pdf.",
+        where: "src/app/api/ingest/route.ts (and a small PDF library)",
+        doneWhen: [
+          "Uploading the govinfo PDF creates a document",
+          "A Word .docx file shows a clear “we don’t support that” message",
+        ],
       },
       {
-        id: "local-2",
-        owner: "Engineering",
-        window: "Now",
-        title: "Confirm seed landed",
-        detail:
-          "Org is Johnson & Johnson. Documents include the CMS-4208-F3 briefing plus the four stand-in SOPs (MDP finance, MLR, hub/PAP, access). Sidebar shows documents indexed. If not, delete data/runtime/ and restart.",
+        id: "AEGIS-5",
+        priority: "do-first",
+        status: "todo",
+        title: "One command to reset the demo",
+        what: "Add npm run demo:reset that deletes the local saved data and loads the fake J&J files again. So a messy laptop is clean before a meeting.",
+        where: "package.json + a small script in scripts/",
+        doneWhen: [
+          "Command exists",
+          "After it runs, company is J&J again",
+          "It does not delete .env.local (your keys)",
+        ],
       },
       {
-        id: "local-3",
-        owner: "Engineering",
-        window: "Now",
-        title: "Offline path still works",
-        detail:
-          "With empty keys, click “CMS-4208-F3 vs J&J”. You should still get a memo from the control catalog. That is the safety net if OpenAI or AWS is down in the room.",
-      },
-    ],
-  },
-  {
-    id: "openai",
-    title: "OpenAI API (this demo’s chat)",
-    blurb: "Public OpenAI is what teammates use. Azure is the client story, not required to demo.",
-    items: [
-      {
-        id: "oa-1",
-        owner: "Engineering",
-        window: "Before demo",
-        title: "Put OPENAI_API_KEY in .env.local",
-        detail:
-          "OPENAI_MODEL=gpt-4o (or whatever you have). Restart next dev. Sidebar Chat should read “OpenAI API (this project)” instead of Template fallback.",
+        id: "AEGIS-10",
+        priority: "do-first",
+        status: "todo",
+        title: "Turn fake policies into search vectors when a key exists",
+        what: "On first start we save policy text but often skip the “smart search” numbers. After seed, if OpenAI or AWS is set, generate those numbers automatically.",
+        where: "src/lib/store.ts (after seed), src/lib/rag.ts embedNewChunks",
+        doneWhen: [
+          "With a key, /api/health shows embeddings greater than 0",
+          "If the API fails, the app still starts",
+        ],
       },
       {
-        id: "oa-2",
-        owner: "Engineering",
-        window: "Before demo",
-        title: "Smoke Scout + Auditor prose",
-        detail:
-          "Ask the copilot the CMS vs J&J starter. You want real sentences citing the mock SOP titles, not only the keyword template. If it fails, the catalog fallback still saves the demo.",
-      },
-      {
-        id: "oa-3",
-        owner: "Engineering",
-        window: "Before demo",
-        title: "Do not mix keys in the room",
-        detail:
-          "Demo laptops: OpenAI only. Do not paste J&J Azure keys into this repo. completeChat already falls through to Azure when OPENAI_API_KEY is empty — that is for a later client cutover, not this showcase.",
+        id: "AEGIS-18",
+        priority: "do-first",
+        status: "todo",
+        title: "A tiny test that the demo path works",
+        what: "A script that hits the running app: health is ok, org name has Johnson, making a report returns findings. No OpenAI needed.",
+        where: "scripts/demo-smoke.sh and npm run demo:smoke",
+        doneWhen: [
+          "With npm run dev running, npm run demo:smoke succeeds",
+          "It fails if J&J seed is missing",
+        ],
       },
     ],
   },
   {
-    id: "mocks",
-    title: "Mock internal regulations and workflows",
-    blurb:
-      "The product only looks real if the org corpus has gaps you can point at on screen.",
-    items: [
+    id: "next",
+    title: "Do next — makes the demo look better",
+    tickets: [
       {
-        id: "mock-1",
-        owner: "Engineering",
-        window: "Now",
-        title: "Keep the CMS briefing as the “new rule”",
-        detail:
-          "Seed doc_cms_4208_f3 is a public-domain FR extract (govinfo PDF). For the demo, that is the uploaded regulation. Full PDF ingest is a later nice-to-have, not blocking.",
+        id: "AEGIS-4",
+        priority: "do-next",
+        status: "todo",
+        title: "Write 3–4 more fake internal docs",
+        what: "Add more fake J&J paperwork (job aid, hub script, calendar) in seed.ts so the company looks fuller. Keep them outdated on purpose.",
+        where: "src/lib/seed.ts",
+        doneWhen: ["New fake docs show on the Organization page after reset."],
       },
       {
-        id: "mock-2",
-        owner: "Engineering",
-        window: "Now",
-        title: "Keep the four stand-in SOPs intentionally stale",
-        detail:
-          "Finance SOP still talks Coverage Gap. MLR has no Oct 1 2026 gate. Hub says “$35 after deductible.” Selected drugs live on a spreadsheet. Those gaps are the demo. Do not “fix” the mocks until after the room.",
+        id: "AEGIS-7",
+        priority: "do-next",
+        status: "todo",
+        title: "If OpenAI fails, say so in the chat",
+        what: "If the key is wrong or the API times out, show “OpenAI failed: …” instead of a quiet weak memo.",
+        where: "src/lib/llm/openai.ts, src/lib/agents.ts, chat panel",
+        doneWhen: ["A bad key shows an error in the chat, not silence."],
       },
       {
-        id: "mock-3",
-        owner: "Engineering",
-        window: "If the story needs more meat",
-        title: "Paste one extra mock policy on /org",
-        detail:
-          "Example: a fake “Part D manufacturer discount close job aid” that still says coverage gap. Title it like an internal SOP. Kind = policy. That shows ingest live without touching seed.ts.",
+        id: "AEGIS-11",
+        priority: "do-next",
+        status: "todo",
+        title: "Turn on AWS search (Bedrock) for the demo AWS account",
+        what: "The AWS search code is already written. You still need: AWS keys, optional Knowledge Base id in .env.local, and a short note in the README how to set it up. No passwords in git.",
+        where: "src/lib/aws/*, .env.example, README",
+        doneWhen: [
+          "With AWS set, the sidebar says Titan or Knowledge Base",
+          "Setup steps are in the README",
+        ],
       },
       {
-        id: "mock-4",
-        owner: "Engineering",
-        window: "If asked live",
-        title: "Know how to ingest a paste",
-        detail:
-          "/regulations paste box or /org “Index document”. .txt / .md only. Have a short markdown snippet in Notes so you are not typing from scratch.",
+        id: "AEGIS-12",
+        priority: "do-next",
+        status: "todo",
+        title: "Don’t mix two kinds of search numbers",
+        what: "OpenAI search numbers and AWS search numbers are different sizes. If someone switches, delete the old numbers and make new ones so search is not nonsense.",
+        where: "src/lib/rag.ts or store.ts",
+        doneWhen: ["Switching from OpenAI to AWS still returns sensible search results."],
       },
       {
-        id: "mock-5",
-        owner: "Engineering",
-        window: "Now",
-        title: "Never put real J&J SOPs in git",
-        detail:
-          "data/runtime is gitignored. seed.ts is fake on purpose. If someone sends a real SOP for a private dry-run, ingest it locally only.",
-      },
-    ],
-  },
-  {
-    id: "aws",
-    title: "AWS Bedrock RAG (the “enterprise retrieval” slide)",
-    blurb:
-      "Optional for a laptop demo. Worth turning on if you want to show corporate RAG, not just keyword search.",
-    items: [
-      {
-        id: "aws-1",
-        owner: "Engineering",
-        window: "If we have an AWS account",
-        title: "Enable Titan Embeddings V2",
-        detail:
-          "AWS_REGION + AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY (or AWS_BEARER_TOKEN_BEDROCK). BEDROCK_EMBEDDING_MODEL_ID=amazon.titan-embed-text-v2:0. IAM: bedrock:InvokeModel. Restart. Sidebar Retrieval should say AWS Titan embeddings. Delete data/runtime chunks if you previously used OpenAI vectors — do not mix spaces.",
+        id: "AEGIS-14",
+        priority: "do-next",
+        status: "todo",
+        title: "Make the gap checklist match the fake policies",
+        what: "The app scores policies by matching words. Make sure those words actually appear (or clearly don’t) in the fake J&J docs, so the memo shows real gaps.",
+        where: "src/lib/frameworks.ts and seed.ts",
+        doneWhen: ["A report with no OpenAI still shows some gaps and some partial matches."],
       },
       {
-        id: "aws-2",
-        owner: "Engineering",
-        window: "If we have time",
-        title: "Optional Knowledge Base",
-        detail:
-          "S3 with the mock SOPs + CMS extract. Create a Bedrock Knowledge Base. Set BEDROCK_KNOWLEDGE_BASE_ID. rag.ts will retrieve from the KB and merge with local chunks. Sidebar: AWS Bedrock Knowledge Base.",
-      },
-      {
-        id: "aws-3",
-        owner: "Presenter",
-        window: "In the room",
-        title: "How to talk about AWS vs OpenAI",
-        detail:
-          "Chat = OpenAI in this demo, Azure when a client like J&J hosts it. Retrieval = AWS Bedrock (Titan / KB) so the corpus can live in their cloud. Two clouds on purpose, not two chat models.",
-      },
-      {
-        id: "aws-4",
-        owner: "Engineering",
-        window: "If AWS is blocked",
-        title: "Skip AWS without killing the demo",
-        detail:
-          "Keyword RAG + OpenAI chat is enough. Say “Bedrock is wired; we did not turn it on for this pass.”",
-      },
-    ],
-  },
-  {
-    id: "script",
-    title: "Demo script (5–7 minutes)",
-    blurb: "Same path every time so the idea is obvious.",
-    items: [
-      {
-        id: "script-1",
-        owner: "Presenter",
-        window: "In the room",
-        title: "Org snapshot first",
-        detail:
-          "/org: “This is how the company says it operates today” — J&J, cms-ma-pd checked, stand-in SOPs listed. Point at the finance SOP still saying Coverage Gap.",
-      },
-      {
-        id: "script-2",
-        owner: "Presenter",
-        window: "In the room",
-        title: "Show the new rule",
-        detail:
-          "/regulations or the CMS doc on file. Link the govinfo PDF. Dates: effective June 1 2026, marketing Oct 1 2026, coverage Jan 1 2027.",
-      },
-      {
-        id: "script-3",
-        owner: "Presenter",
-        window: "In the room",
-        title: "Run the copilot starter",
-        detail:
-          "/ → “CMS-4208-F3 vs J&J”. Scout then Auditor. Wait for the memo. Call out 2–3 gaps: CGDP vs MDP, insulin “after deductible”, missing Oct 1 MLR gate.",
-      },
-      {
-        id: "script-4",
-        owner: "Presenter",
-        window: "In the room",
-        title: "Open the saved report",
-        detail:
-          "/reports → the CMS MA/Part D memo. 30/60/90 is the “what would the company do next” slide. Repeat: internal memo, not an attestation.",
-      },
-      {
-        id: "script-5",
-        owner: "Presenter",
-        window: "If they ask “how does this plug in?”",
-        detail:
-          "/integrate. Same agents over HTTP. Story: policy system publishes a SOP → POST /api/v1/ingest → copilot already has it. Not built for this demo.",
-      },
-    ],
-  },
-  {
-    id: "polish",
-    title: "Make it look like a product, not a homework folder",
-    blurb: "Intention is corporate-level. Execution is still a demo.",
-    items: [
-      {
-        id: "polish-1",
-        owner: "Engineering",
-        window: "Before demo",
-        title: "Golden questions in the copilot",
-        detail:
-          "Starters already cover CMS vs J&J, MDP, Oct 1 gate, keep-us-current. Do not ad-lib a PCI question in this showcase.",
-      },
-      {
-        id: "polish-2",
-        owner: "Engineering",
-        window: "Before demo",
-        title: "Wipe leftover payment-processor artifacts",
-        detail:
-          "No Northstar name, no PCI-first report button, no Claude. Chat badge OpenAI or template. Framework checkbox CMS MA/Part D on.",
-      },
-      {
-        id: "polish-3",
-        owner: "Engineering",
-        window: "Before demo",
-        title: "One clean reports list",
-        detail:
-          "Optional: delete old SOC/PCI memos from data/runtime/reports.json so the first thing they see is the CMS memo.",
-      },
-      {
-        id: "polish-4",
-        owner: "Presenter",
-        window: "Before demo",
-        title: "Network backup",
-        detail:
-          "Hotspot if the office blocks api.openai.com. Offline catalog path if the hotspot fails.",
+        id: "AEGIS-15",
+        priority: "do-next",
+        status: "todo",
+        title: "Delete button for a document",
+        what: "On Organization, add a way to delete one uploaded file (and its search pieces) without wiping the whole folder.",
+        where: "new DELETE API + Organization page",
+        doneWhen: ["Click delete, the doc is gone from the list."],
       },
     ],
   },
   {
     id: "later",
-    title: "On purpose later (not this demo)",
-    blurb: "Say these if asked. Do not build them to “finish” the showcase.",
-    items: [
+    title: "Later — not needed to demo",
+    tickets: [
       {
-        id: "later-1",
-        owner: "Engineering",
-        window: "After the demo",
-        title: "Azure OpenAI for a real client",
-        detail:
-          "Empty OPENAI_API_KEY. Set AZURE_OPENAI_*. Same agents. Re-embed if you leave Titan/OpenAI vectors behind.",
+        id: "AEGIS-8",
+        priority: "later",
+        status: "todo",
+        title: "Double-check Azure still works with no extra screens",
+        what: "This demo uses OpenAI. For a real client later we use Azure. Just make sure if OpenAI key is empty and Azure keys are set, chat still works. No new button.",
+        where: "src/lib/llm/openai.ts",
+        doneWhen: ["Written down in README how to switch, or a small test."],
       },
       {
-        id: "later-2",
-        owner: "Engineering",
-        window: "After the demo",
-        title: "PDF ingest, Postgres, SSO",
-        detail:
-          "Today: .txt/.md, JSON files, no login. Fine for a showcase. Not fine for a shared J&J tenant.",
+        id: "AEGIS-16",
+        priority: "later",
+        status: "todo",
+        title: "Hide old PCI reports",
+        what: "Some old payment-card memos may still show on Reports. Hide them or add delete so the first memo you see is CMS.",
+        where: "src/app/reports/page.tsx",
+        doneWhen: ["Reports page leads with the CMS memo."],
       },
       {
-        id: "later-3",
-        owner: "Engineering",
-        window: "After the demo",
-        title: "Swap mocks for real (redacted) SOPs",
-        detail:
-          "That is when the product stops being a story and starts being their corpus. Out of scope until they ask.",
+        id: "AEGIS-19",
+        priority: "later",
+        status: "todo",
+        title: "File picker allows PDF",
+        what: "After AEGIS-3, change the upload box so it lets you pick .pdf (and still .txt / .md).",
+        where: "src/app/org/page.tsx, src/app/regulations/page.tsx",
+        doneWhen: ["The file picker lists PDF as allowed."],
       },
     ],
   },
 ];
+
+export function allTickets() {
+  return EPICS.flatMap((e) => e.tickets);
+}

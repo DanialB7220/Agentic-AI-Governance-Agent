@@ -90,7 +90,7 @@ Same functions are re-exported at `/api/v1/*` so another product can skip the UI
 | `src/lib/types.ts` | Shared TypeScript types. UI, API, and store all import this. Change it first. |
 | `data/runtime/` | Live JSON store created on first boot. Gitignored. Each teammate has their own. |
 | `src/lib/seed.ts` | Demo org (Johnson & Johnson) + CMS-4208-F3 briefing + stand-in SOPs. |
-| `src/lib/workstream.ts` | Demo-readiness checklist rendered at `/workstream`. Same content as `ACTION-ITEMS.md`. |
+| `src/lib/workstream.ts` | Plain “what to code” list for `/workstream`. Same as `ACTION-ITEMS.md`. |
 | `.env.example` | Documented env vars. Copy to `.env.local` (also gitignored). |
 | `next.config.ts` | Marks AWS SDK as server-external. Pins Turbopack root to this repo. |
 
@@ -99,7 +99,7 @@ Full tree:
 ```
 Agentic-AI-Governance-Agent/
 ├── README.md
-├── ACTION-ITEMS.md           get-the-demo-running checklist
+├── ACTION-ITEMS.md           Jira tickets for the running demo
 ├── package.json              Next + React + openai + AWS SDK + zod
 ├── next.config.ts
 ├── tsconfig.json             @/* → ./src/*
@@ -138,7 +138,7 @@ Agentic-AI-Governance-Agent/
         ├── ingest.ts
         ├── store.ts
         ├── seed.ts
-        ├── workstream.ts     demo-readiness items
+        ├── workstream.ts     AEGIS-* tickets
         ├── frameworks.ts
         ├── regulations.ts
         ├── http.ts           API key helper
@@ -331,7 +331,7 @@ Scout gets retrieved chunks. Auditor scores against the **full org corpus** (pol
 | Route | Function |
 |---|---|
 | `/` Copilot | Chat. Scout then (if needed) Auditor. Starters already target CMS-4208-F3 vs J&J. |
-| `/workstream` | Checklist to get this prototype demo-ready (mocks, OpenAI, optional AWS). |
+| `/workstream` | What to code vs already built. |
 | `/regulations` | Federal Register feed. Index a rule into RAG, or paste / upload `.txt` / `.md`. |
 | `/org` | Org snapshot + policy/evidence ingest. Seeded as Johnson & Johnson. |
 | `/reports` | Saved memos. Button to generate a CMS MA/Part D memo without chat. |

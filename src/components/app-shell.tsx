@@ -15,7 +15,7 @@ import {
 
 const NAV = [
   { href: "/", label: "Copilot", icon: MessageSquare },
-  { href: "/workstream", label: "Workstream", icon: ListChecks },
+  { href: "/workstream", label: "Tickets", icon: ListChecks },
   { href: "/regulations", label: "Regulations", icon: BookOpen },
   { href: "/org", label: "Organization", icon: Building2 },
   { href: "/reports", label: "Reports", icon: FileBarChart },
