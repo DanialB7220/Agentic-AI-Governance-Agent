@@ -1,130 +1,108 @@
-# What to build
+# What to add / change in this project
 
-Plain list for the team. Same list in the app under **Tickets**.
+This product is an **AI governance** app.
 
-This demo: fake Johnson & Johnson policies + the CMS Medicare rule → chatbot writes a gap memo.
+It should:
 
-- **This project:** OpenAI API (put `OPENAI_API_KEY` in `.env.local`)
-- **A real client later:** Azure OpenAI (don’t build extra screens for that now)
-- **Search:** our saved files, plus AWS later if we turn it on
+1. **Find** the newest government rules (scan) **or** let you **upload** a new rule  
+2. Read those against **internal policies** using **AWS RAG**  
+3. Tell you **what to change**  
+4. **Write audit reports**  
+5. **Keep records**  
+6. Show **compliance risk**
 
----
+This repo is a thin first cut (chat + keyword gaps + local files). Below is what to **add or change** so it actually does the job.
 
-## Already built — do not rebuild these
-
-| Ticket | What it is | File |
-|---|---|---|
-| AEGIS-1 | App starts as fake J&J with old fake policies | `src/lib/seed.ts` |
-| AEGIS-2 | Short CMS rule summary is already loaded | `src/lib/seed.ts` |
-| AEGIS-6 | Chat talks to OpenAI if you have a key | `src/lib/llm/openai.ts` |
-| AEGIS-9 | Finds matching policy text (even with no keys) | `src/lib/rag.ts` |
-| AEGIS-13 | Chat page + Reports page + “CMS vs J&J” button | `chat-panel.tsx`, `/reports` |
-| AEGIS-17 | Other apps can call `/api/v1/...` | `/integrate` |
+Same list in the app: **Tickets**.
 
 ---
 
-## Must code (do these first)
+## What is already here (keep, then extend)
 
-### AEGIS-3 — Upload the real CMS PDF
-**Add:** Read a `.pdf` and save the text. Today only `.txt` and `.md` work.
-
-**Code in:** `src/app/api/ingest/route.ts` (add a PDF library)
-
-**Done when:** You can upload `2026-06600.pdf` and it shows up as a document.
-
----
-
-### AEGIS-5 — Reset button for the demo
-**Add:** `npm run demo:reset` that wipes local saved data and loads fake J&J again.
-
-**Code in:** `package.json` + a script under `scripts/`
-
-**Done when:** One command makes the laptop clean. It must **not** delete `.env.local`.
-
----
-
-### AEGIS-10 — Smart search on first start
-**Add:** After fake policies load, if OpenAI or AWS keys exist, create search numbers for that text automatically.
-
-**Code in:** `src/lib/store.ts` (after seed) using `embedNewChunks` in `src/lib/rag.ts`
-
-**Done when:** `/api/health` shows embeddings > 0 when a key is set. If OpenAI is down, the app still starts.
-
----
-
-### AEGIS-18 — Tiny “does the demo work?” script
-**Add:** A script that checks: app is up, org name has “Johnson”, making a report returns gaps. No OpenAI needed.
-
-**Code in:** `scripts/demo-smoke.sh` + `npm run demo:smoke`
-
-**Done when:** `npm run dev` then `npm run demo:smoke` succeeds.
-
----
-
-## Do next (nicer demo)
-
-### AEGIS-4 — More fake paperwork
-**Add:** 3–4 extra fake J&J docs in `src/lib/seed.ts` (keep them outdated on purpose).
-
-**Done when:** They show on the Organization page after reset.
-
----
-
-### AEGIS-7 — Show OpenAI errors in chat
-**Add:** If the key is bad or the API times out, the chat says so.
-
-**Code in:** `src/lib/llm/openai.ts`, `src/lib/agents.ts`
-
-**Done when:** A bad key shows an error on screen, not a quiet weak memo.
-
----
-
-### AEGIS-11 — Turn on AWS search
-**Add:** Keys + optional Knowledge Base id in `.env.local`. Write 5 lines in the README how to set AWS. Code for AWS is already in `src/lib/aws/`.
-
-**Done when:** Sidebar says Titan or Knowledge Base. No secrets in git.
-
----
-
-### AEGIS-12 — Don’t mix OpenAI search with AWS search
-**Add:** If someone switches from OpenAI to AWS, delete old search numbers and make new ones.
-
-**Code in:** `src/lib/rag.ts` or `src/lib/store.ts`
-
-**Done when:** Switching providers still finds the right policy text.
-
----
-
-### AEGIS-14 — Gap list should match the fake policies
-**Add:** The words we look for in `src/lib/frameworks.ts` should match (or clearly miss) text in `seed.ts`.
-
-**Done when:** A report with no OpenAI still shows some gaps.
-
----
-
-### AEGIS-15 — Delete a document
-**Add:** A delete button on Organization for one file.
-
-**Code in:** new DELETE API + `src/app/org/page.tsx`
-
-**Done when:** Click delete → file gone from the list.
-
----
-
-## Later (skip for the first demo)
-
-| Ticket | What |
+| Piece | Today |
 |---|---|
-| AEGIS-8 | Make sure Azure still works if we empty the OpenAI key (no new UI) |
-| AEGIS-16 | Hide old PCI reports so CMS is first |
-| AEGIS-19 | File picker allows PDF (after AEGIS-3) |
+| Chat (Scout / Auditor) | Explains a question; can draft a memo |
+| Regulations page | Pulls a live Federal Register list when you open it; you can index one item |
+| Organization | Fake J&J policies + you can paste more .txt/.md |
+| Reports | Saves memos in a local JSON file |
+| AWS | Code for Bedrock search exists, but it is not the main path yet |
+| OpenAI | Chat for **this** project. Azure later for a client |
 
 ---
 
-## Who grabs what
+## 1. Scan for new regulations
 
-1. Person A: **AEGIS-3** (PDF upload)  
-2. Person B: **AEGIS-5** + **AEGIS-18** (reset + smoke test)  
-3. Person C: **AEGIS-10** (search numbers on start)
+| ID | Add / change | Why | Where |
+|---|---|---|---|
+| **GOV-1** | Check for new rules on a **timer**, even if nobody has the site open | Scan only happens when you load a page | `src/lib/regulations.ts` + a cron/API job |
+| **GOV-2** | Clear **“this is new”** list (count + badges) | Seen-IDs exist but nobody gets an alert | `/regulations` |
+| **GOV-3** | When you Index a rule, save the **full text**, not the short blurb | RAG cannot work off an abstract | `src/app/api/regulations/route.ts` |
+| **GOV-4** | Scan **the agencies this company cares about** | Agency list is hardcoded | Organization settings + `regulations.ts` |
 
-Then AEGIS-4, 7, 11 if there is time.
+---
+
+## 2. Upload a new regulation
+
+| ID | Add / change | Why | Where |
+|---|---|---|---|
+| **GOV-5** | Allow **PDF** upload (Word later) | Today only .txt / .md | `src/app/api/ingest/route.ts`, Org + Regulations upload boxes |
+| **GOV-6** | After upload, **auto-run** “what should we change?” and save a report | Upload does not start analysis | `src/lib/ingest.ts`, `src/lib/agents.ts` |
+
+---
+
+## 3. AWS RAG + internal policies
+
+| ID | Add / change | Why | Where |
+|---|---|---|---|
+| **GOV-7** | Make **AWS** (Titan + Knowledge Base) the real search for policies and rules | Search is mostly local word-match | `src/lib/aws/*`, `src/lib/rag.ts`, `.env.local` |
+| **GOV-8** | **Every** saved file goes into search right away | New docs often have no vectors | `src/lib/ingest.ts` |
+| **GOV-9** | Search must know **policy vs regulation** | A rule must not count as “we already comply” | `rag.ts`, `agents.ts` |
+
+---
+
+## 4. Tell you what to change
+
+| ID | Add / change | Why | Where |
+|---|---|---|---|
+| **GOV-10** | For **this** new rule, list which **internal policy** to edit and what to write | Auditor is a generic word checklist, not “this PDF vs these SOPs” | `src/lib/agents.ts` |
+| **GOV-11** | Each change: **owner**, **due date**, **open / done** | Roadmap is only 30/60/90 buckets | `src/lib/types.ts`, Reports screens |
+
+---
+
+## 5. Audit reports
+
+| ID | Add / change | Why | Where |
+|---|---|---|---|
+| **GOV-12** | Full audit report: scope, rule, policies checked, findings, sign-off. **Export PDF** | Today it is a chat memo + % | `/reports`, `agents.ts` |
+| **GOV-13** | Every run is a **new saved report** tied to a rule + date (history) | Weak record of “which audit was this?” | `store.ts`, `/reports/[id]` |
+
+---
+
+## 6. Keep records
+
+| ID | Add / change | Why | Where |
+|---|---|---|---|
+| **GOV-14** | **Activity log** (uploaded policy, scanned rule, ran report) + a Records page | No history of who did what | new `src/app/records/page.tsx` |
+| **GOV-15** | Store records in a **real database** (not only `data/runtime` JSON on one laptop) | JSON is not an audit trail | `src/lib/store.ts` |
+
+---
+
+## 7. Compliance risk
+
+| ID | Add / change | Why | Where |
+|---|---|---|---|
+| **GOV-16** | Each gap has **high / medium / low** risk | Today: covered / partial / missing only | `types.ts`, report UI |
+| **GOV-17** | **Risk dashboard**: overall score, open high risks, new rules this week, last audit | No leadership view | new `src/app/risk/page.tsx` |
+
+---
+
+## Suggested order
+
+1. **GOV-5** PDF upload + **GOV-6** auto analysis  
+2. **GOV-3** full rule text + **GOV-7 / GOV-8** AWS search  
+3. **GOV-10** real “what to change” vs the uploaded rule  
+4. **GOV-16 + GOV-17** risk  
+5. **GOV-12 + GOV-14 + GOV-15** proper reports and records  
+6. **GOV-1 + GOV-2** background scan and “what’s new”
+
+Chat can stay on **OpenAI** in this repo; a client can switch to **Azure**. Search should be **AWS**.
