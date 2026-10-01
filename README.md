@@ -269,6 +269,7 @@ This is **not** safe for multiple server instances. Fine for `next dev`.
 1. Bedrock Knowledge Base, if `BEDROCK_KNOWLEDGE_BASE_ID` is set
 2. Local cosine search via Titan (AWS), else OpenAI embeddings, else Azure embeddings
 3. Keyword overlap if neither cloud is configured
+4. Pinecone query — **commented out** last resort in `src/lib/pinecone.ts` (not in the live path)
 
 Scout gets retrieved chunks. Auditor scores against the **full org corpus** (policies/evidence/controls), not regulation chunks.
 
@@ -498,6 +499,10 @@ Without keys, retrieval is keyword search and Scout/Auditor use the control cata
 3. Optional: create a Knowledge Base and set `BEDROCK_KNOWLEDGE_BASE_ID`
 4. If you are not using AWS yet: OpenAI embeddings locally, Azure embeddings at J&J
 
+**RAG last resort (Pinecone) — off by default**
+
+If Bedrock never happens, there is a Pinecone upsert/query path in `src/lib/pinecone.ts`. It is **all commented out**. Do not enable it unless AWS is a dead end. To turn it on: install `@pinecone-database/pinecone`, uncomment that file plus the marked lines in `rag.ts` / `ingest.ts`, and set `PINECONE_API_KEY` + `PINECONE_INDEX`. Index dimension must match embeddings (OpenAI 1536 or Titan-256 in this repo).
+
 | Variable | Purpose |
 |---|---|
 | `OPENAI_API_KEY` | This project’s chat + embeddings |
@@ -513,6 +518,9 @@ Without keys, retrieval is keyword search and Scout/Auditor use the control cata
 | `AWS_BEARER_TOKEN_BEDROCK` | Bedrock API key, if you use that instead |
 | `BEDROCK_EMBEDDING_MODEL_ID` | Titan embeddings (default v2) |
 | `BEDROCK_KNOWLEDGE_BASE_ID` | managed AWS RAG |
+| `PINECONE_API_KEY` | last-resort vector DB — **leave unset / commented** |
+| `PINECONE_INDEX` | Pinecone index name (only if you uncomment Pinecone) |
+| `PINECONE_NAMESPACE` | optional, default `aegis` |
 | `AEGIS_API_KEY` | lock `/api/v1/*` |
 
 Do not commit `.env.local`.

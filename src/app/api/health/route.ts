@@ -19,6 +19,8 @@ export async function GET() {
     chat: openai ? "openai" : azure ? "azure" : "offline",
     aws: awsConfigured(),
     knowledgeBase: Boolean(knowledgeBaseId()),
+    // LAST RESORT Pinecone (off):
+    // pinecone: Boolean(process.env.PINECONE_API_KEY && process.env.PINECONE_INDEX),
     documents: documents.length,
     chunks: chunks.length,
     reports: reports.length,

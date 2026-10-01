@@ -25,5 +25,6 @@ export async function ingestDocument(input: {
     id: input.id,
   });
   await embedNewChunks(chunks).catch(() => chunks);
+  // LAST RESORT Pinecone upsert is inside embedNewChunks (still commented there).
   return doc;
 }

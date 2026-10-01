@@ -3,6 +3,9 @@ import { retrieveFromKnowledgeBase } from "./aws/knowledge-base";
 import { listChunks, saveChunks } from "./store";
 import type { Chunk, RetrievedChunk } from "./types";
 
+// LAST RESORT if AWS Bedrock is not available — uncomment + npm i @pinecone-database/pinecone
+// import { retrieveFromPinecone, upsertChunksToPinecone } from "./pinecone";
+
 function cosine(a: number[], b: number[]) {
   let dot = 0;
   let na = 0;
@@ -37,6 +40,8 @@ export async function embedNewChunks(chunks: Chunk[]) {
   if (!vectors) return chunks;
   const updated = chunks.map((c, i) => ({ ...c, embedding: vectors[i] }));
   await saveChunks(updated);
+  // LAST RESORT Pinecone (off). Uncomment if AWS never happens:
+  // await upsertChunksToPinecone(updated).catch(() => undefined);
   return updated;
 }
 
@@ -47,8 +52,11 @@ export async function retrieve(
   const [local, kb] = await Promise.all([
     retrieveLocal(query, k),
     retrieveFromKnowledgeBase(query, k).catch(() => null),
+    // LAST RESORT Pinecone (off). Uncomment the import at the top too:
+    // retrieveFromPinecone(query, k).catch(() => null),
   ]);
   const merged = [...(kb ?? []), ...local];
+  // const merged = [...(kb ?? []), ...(pine ?? []), ...local];
   const seen = new Set<string>();
   return merged
     .filter((item) => {

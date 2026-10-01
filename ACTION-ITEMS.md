@@ -55,6 +55,7 @@ Same list in the app: **Tickets**.
 | ID | Add / change | Why | Where |
 |---|---|---|---|
 | **GOV-7** | Make **AWS** (Titan + Knowledge Base) the real search for policies and rules | Search is mostly local word-match | `src/lib/aws/*`, `src/lib/rag.ts`, `.env.local` |
+| **GOV-7b** | **Last resort only:** Pinecone vector DB if AWS never happens. Code is in the repo **fully commented out** — do not turn it on unless Bedrock is a no. | Need a cloud vector store without AWS | `src/lib/pinecone.ts` (commented), commented lines in `rag.ts` / `ingest.ts` |
 | **GOV-8** | **Every** saved file goes into search right away | New docs often have no vectors | `src/lib/ingest.ts` |
 | **GOV-9** | Search must know **policy vs regulation** | A rule must not count as “we already comply” | `rag.ts`, `agents.ts` |
 
@@ -101,7 +102,7 @@ Same list in the app: **Tickets**.
 1. **GOV-5** PDF upload + **GOV-6** auto analysis  
 2. **GOV-3** full rule text + **GOV-7 / GOV-8** AWS search  
 3. **GOV-10** real “what to change” vs the uploaded rule  
-4. **GOV-16 + GOV-17** risk  
+4. **GOV-16 + GOV-17** risk 
 5. **GOV-12 + GOV-14 + GOV-15** proper reports and records  
 6. **GOV-1 + GOV-2** background scan and “what’s new”
 

@@ -94,6 +94,14 @@ export const EPICS: TicketGroup[] = [
         where: "src/lib/aws/*, src/lib/rag.ts, .env.local",
       },
       {
+        id: "GOV-7b",
+        status: "todo",
+        title: "Last resort: Pinecone (keep commented)",
+        what: "If AWS never happens, we still need a cloud vector store.",
+        change: "Pinecone upsert/query is already written but fully commented out in src/lib/pinecone.ts and rag.ts. Do not uncomment unless Bedrock is a no.",
+        where: "src/lib/pinecone.ts, commented lines in rag.ts / ingest.ts",
+      },
+      {
         id: "GOV-8",
         status: "todo",
         title: "Always index a file into search when it is saved",
