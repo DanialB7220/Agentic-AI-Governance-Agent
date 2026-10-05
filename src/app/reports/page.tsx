@@ -73,7 +73,15 @@ export default function ReportsPage() {
               <p className="mt-1 text-xs text-slate-400">
                 {r.createdAt.slice(0, 10)} · {r.coveragePct}% covered ·{" "}
                 {r.frameworks.map((f) => FRAMEWORK_LABEL[f]).join(", ")}
+                {r.changes?.length
+                  ? ` · ${r.changes.length} policy change${r.changes.length === 1 ? "" : "s"}`
+                  : ""}
               </p>
+              {r.regulationTitle ? (
+                <p className="mt-1 text-xs text-slate-500">
+                  Regulation: {r.regulationTitle}
+                </p>
+              ) : null}
               <p className="mt-2 text-sm text-slate-400">{r.summary}</p>
             </Link>
           </li>

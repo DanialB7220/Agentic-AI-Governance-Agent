@@ -41,11 +41,12 @@ export const EPICS: TicketGroup[] = [
       },
       {
         id: "GOV-3",
-        status: "todo",
+        status: "done",
         title: "Save the full rule text, not just the short abstract",
-        what: "Indexing a feed item only saves the abstract, so RAG barely knows the rule.",
-        change: "When you click Index, fetch the full Federal Register text (or HTML) and store that.",
-        where: "src/app/api/regulations/route.ts",
+        what: "Indexing used to store only the Federal Register abstract.",
+        change:
+          "Index now fetches documents/{number}.json and raw_text_url, then stores up to 800k characters for RAG.",
+        where: "src/lib/extract-upload.ts, src/app/api/regulations/route.ts",
       },
       {
         id: "GOV-4",
@@ -64,19 +65,21 @@ export const EPICS: TicketGroup[] = [
     tickets: [
       {
         id: "GOV-5",
-        status: "todo",
+        status: "done",
         title: "Accept PDF (and later Word) uploads",
-        what: "Upload only works for .txt and .md.",
-        change: "Read PDF text on ingest. File picker on Regulations and Organization should allow .pdf.",
-        where: "src/app/api/ingest/route.ts, org + regulations pages",
+        what: "Upload only worked for pasted .txt and .md.",
+        change:
+          "Ingest extracts PDF text with unpdf. Regulations and Organization file pickers accept PDF, .txt, and .md. Word is still later.",
+        where: "src/lib/extract-upload.ts, ingest API, org + regulations pages",
       },
       {
         id: "GOV-6",
-        status: "todo",
+        status: "done",
         title: "After upload, automatically say what to change",
-        what: "Upload just stores the file. You still have to go to chat and ask.",
-        change: "After a regulation is saved, auto-run Auditor and open/save a report tied to that file.",
-        where: "ingest.ts, agents.ts",
+        what: "Upload used to only store the file.",
+        change:
+          "Saving a regulation auto-runs Auditor, stores a report, and opens it. Policy/evidence uploads are indexed only.",
+        where: "src/app/api/ingest/route.ts, src/lib/agents.ts",
       },
     ],
   },
@@ -129,11 +132,12 @@ export const EPICS: TicketGroup[] = [
     tickets: [
       {
         id: "GOV-10",
-        status: "partial",
+        status: "done",
         title: "Change list for this specific new rule",
-        what: "Auditor mostly checks a fixed keyword list (CMS/SOC/PCI). It is not “this PDF vs these SOPs.”",
-        change: "For the selected/uploaded rule, list: which internal policy to edit, what is wrong, what to write instead.",
-        where: "src/lib/agents.ts, src/lib/frameworks.ts",
+        what: "Auditor used to score a fixed keyword list, not this rule vs these SOPs.",
+        change:
+          "Reports now include a “What to change in our policies” list (named SOP, issue, action) from RAG of this regulation vs internal policies.",
+        where: "src/lib/agents.ts, report detail",
       },
       {
         id: "GOV-11",
