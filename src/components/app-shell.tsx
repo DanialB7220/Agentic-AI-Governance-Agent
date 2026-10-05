@@ -27,7 +27,10 @@ type Health = {
   azure: boolean;
   aws: boolean;
   knowledgeBase: boolean;
+  rag?: string;
   documents: number;
+  embeddings?: number;
+  pendingEmbeddings?: number;
   chat?: string;
 };
 
@@ -92,15 +95,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <p>
             {health?.knowledgeBase
               ? "AWS Bedrock Knowledge Base"
-              : health?.aws
+              : health?.rag === "titan"
                 ? "AWS Titan embeddings"
-                : health?.openai
+                : health?.rag === "openai"
                   ? "OpenAI embeddings"
-                  : health?.azure
+                  : health?.rag === "azure"
                     ? "Azure OpenAI embeddings"
                     : "Local keyword RAG"}
           </p>
-          <p className="mt-1">{health?.documents ?? "—"} documents indexed</p>
+          <p className="mt-1">
+            {health?.documents ?? "—"} documents
+            {typeof health?.embeddings === "number"
+              ? ` · ${health.embeddings} vectors`
+              : ""}
+          </p>
         </div>
       </aside>
 

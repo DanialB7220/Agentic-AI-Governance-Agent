@@ -37,7 +37,7 @@ export async function* runCopilot(input: {
   const [org, docs, retrieved, feed] = await Promise.all([
     getOrg(),
     listDocuments(),
-    retrieve(query, 8),
+    retrieve(query, 10),
     fetchRegulationFeed().catch(() => []),
   ]);
 
@@ -105,23 +105,26 @@ async function runScout(input: {
   recentRegs: string[];
 }) {
   const context = input.retrieved
-    .map(
-      (r, i) =>
-        `[${i + 1}] ${r.chunk.metadata.title} (${r.chunk.metadata.kind})\n${r.chunk.text}`,
-    )
+    .map((r, i) => {
+      const bucket =
+        r.chunk.metadata.kind === "regulation" ? "REGULATION" : "POLICY";
+      return `[${i + 1}] ${bucket} — ${r.chunk.metadata.title} (${r.chunk.metadata.kind})\n${r.chunk.text}`;
+    })
     .join("\n\n");
 
   const llm = await completeChat({
     system:
-      "You are Scout, a regulation analyst for a governance copilot. Be concrete. Cite retrieved document titles. Do not claim this is a legal opinion. If context is thin, say what is missing.",
+      "You are Scout, a regulation analyst for a governance copilot. Retrieved passages are labeled POLICY (company) or REGULATION (government). Never treat a REGULATION as proof the company already complies. Cite document titles. Not a legal opinion. If context is thin, say what is missing.",
     user: `Org: ${input.orgName}\n${input.orgNotes}\n\nRecent federal items:\n${input.recentRegs.join("\n") || "(none)"}\n\nRetrieved context:\n${context || "(none)"}\n\nUser question:\n${input.query}`,
   });
 
   if (llm) return llm;
 
-  const bullets = input.retrieved.slice(0, 4).map((r) => {
+  const bullets = input.retrieved.slice(0, 6).map((r) => {
+    const bucket =
+      r.chunk.metadata.kind === "regulation" ? "Regulation" : "Policy";
     const snippet = r.chunk.text.replace(/\s+/g, " ").slice(0, 220);
-    return `- **${r.chunk.metadata.title}** — ${snippet}`;
+    return `- **[${bucket}] ${r.chunk.metadata.title}** — ${snippet}`;
   });
 
   const regs = input.recentRegs.slice(0, 3).map((r) => `- ${r}`);

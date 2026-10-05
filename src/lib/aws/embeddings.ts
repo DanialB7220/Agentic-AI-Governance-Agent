@@ -41,8 +41,9 @@ export async function embedWithTitan(
       }),
     );
     const payload = JSON.parse(new TextDecoder().decode(res.body)) as {
-      embedding: number[];
+      embedding?: number[];
     };
+    if (!payload.embedding?.length) return null;
     out.push(payload.embedding);
   }
   return out;

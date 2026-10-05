@@ -267,9 +267,9 @@ This is **not** safe for multiple server instances. Fine for `next dev`.
 **How:** Ingest splits text (~900 chars, 140 overlap) in `store.chunkDocument`. Retrieve in `rag.ts`:
 
 1. Bedrock Knowledge Base, if `BEDROCK_KNOWLEDGE_BASE_ID` is set
-2. Local cosine search via Titan (AWS), else OpenAI embeddings, else Azure embeddings
-3. Keyword overlap if neither cloud is configured
-4. Pinecone query — **commented out** last resort in `src/lib/pinecone.ts` (not in the live path)
+2. Local search: **policies** and **regulations** scored separately (Titan / OpenAI / Azure vectors, or keyword)
+3. Missing vectors are filled on ingest and on first `/api/health` or chat (`ensureIndexed`)
+4. Pinecone query — **commented out** last resort in `src/lib/pinecone.ts`
 
 Scout gets retrieved chunks. Auditor scores against the **full org corpus** (policies/evidence/controls), not regulation chunks.
 
@@ -428,7 +428,7 @@ If `AEGIS_API_KEY` is set, v1 routes require header `x-api-key`. App routes do n
 
 | Method | Path | Body / notes |
 |---|---|---|
-| GET | `/api/health` | `{ openai, azure, chat, aws, knowledgeBase, documents, chunks, reports, embeddings }` |
+| GET | `/api/health` | `{ openai, azure, chat, aws, knowledgeBase, rag, documents, chunks, reports, embeddings, pendingEmbeddings }` |
 | GET / PUT | `/api/org` | PUT partial org snapshot |
 | GET | `/api/documents` | all indexed docs |
 | POST | `/api/ingest` | JSON or `multipart/form-data` (`file`, `title`, `kind`, `text`) |

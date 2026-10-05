@@ -24,7 +24,10 @@ export async function ingestDocument(input: {
     publishedAt: input.publishedAt,
     id: input.id,
   });
-  await embedNewChunks(chunks).catch(() => chunks);
+  await embedNewChunks(chunks).catch((err) => {
+    console.error("Could not embed ingested document", err);
+    return chunks;
+  });
   // LAST RESORT Pinecone upsert is inside embedNewChunks (still commented there).
   return doc;
 }

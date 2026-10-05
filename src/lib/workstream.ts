@@ -89,9 +89,10 @@ export const EPICS: TicketGroup[] = [
         id: "GOV-7",
         status: "partial",
         title: "Use AWS as the real search (not only laptop JSON)",
-        what: "Bedrock code exists, but demo search is mostly local files + word match.",
-        change: "Turn on Titan embeddings and (ideally) a Bedrock Knowledge Base of policies + rules. Sidebar should show AWS when it is on.",
-        where: "src/lib/aws/*, src/lib/rag.ts, .env.local",
+        what: "Search used to be mostly local word-match.",
+        change:
+          "Titan embeddings if AWS keys exist, else OpenAI/Azure embeddings, else keyword. Bedrock Knowledge Base still merges in when BEDROCK_KNOWLEDGE_BASE_ID is set. Seed chunks are embedded on first health/chat.",
+        where: "src/lib/aws/*, src/lib/rag.ts, src/lib/embeddings.ts",
       },
       {
         id: "GOV-7b",
@@ -103,19 +104,21 @@ export const EPICS: TicketGroup[] = [
       },
       {
         id: "GOV-8",
-        status: "todo",
+        status: "done",
         title: "Always index a file into search when it is saved",
-        what: "New policies often have no search vectors until someone re-ingests.",
-        change: "Every ingest (policy or regulation) must embed into AWS/local search. Failures should show in the UI.",
-        where: "src/lib/ingest.ts, store.ts",
+        what: "New policies often had no search vectors.",
+        change:
+          "Ingest embeds immediately. ensureIndexed() backfills missing or wrong-size vectors so OpenAI and Titan are not mixed.",
+        where: "src/lib/ingest.ts, src/lib/rag.ts",
       },
       {
         id: "GOV-9",
-        status: "todo",
+        status: "done",
         title: "Keep company policies vs government rules separate in search",
-        what: "Chunks mix together. The bot can treat a rule as if it were already company policy.",
-        change: "Search should label “this is a policy” vs “this is a regulation.” Auditor only uses policies as proof of coverage.",
-        where: "rag.ts, agents.ts (already partly true — make it strict and visible in citations)",
+        what: "Chunks used to mix so a rule could look like company policy.",
+        change:
+          "Retrieve pulls policies and regulations in separate buckets. Scout labels POLICY vs REGULATION. Auditor still scores only org policies.",
+        where: "src/lib/rag.ts, src/lib/agents.ts",
       },
     ],
   },

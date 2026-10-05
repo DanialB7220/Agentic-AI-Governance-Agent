@@ -25,8 +25,8 @@ Same list in the app: **Tickets**.
 | Regulations page | Pulls a live Federal Register list when you open it; you can index one item |
 | Organization | Fake J&J policies + you can paste more .txt/.md |
 | Reports | Saves memos in a local JSON file |
-| AWS | Code for Bedrock search exists, but it is not the main path yet |
-| OpenAI | Chat for **this** project. Azure later for a client |
+| AWS | Titan embeddings + optional Knowledge Base. Search indexes on ingest and first health/chat. Policies and rules are retrieved separately. |
+| OpenAI | Chat for **this** project. Also embeddings if AWS is off. Azure later for a client |
 
 ---
 
@@ -54,10 +54,10 @@ Same list in the app: **Tickets**.
 
 | ID | Add / change | Why | Where |
 |---|---|---|---|
-| **GOV-7** | Make **AWS** (Titan + Knowledge Base) the real search for policies and rules | Search is mostly local word-match | `src/lib/aws/*`, `src/lib/rag.ts`, `.env.local` |
-| **GOV-7b** | **Last resort only:** Pinecone vector DB if AWS never happens. Code is in the repo **fully commented out** — do not turn it on unless Bedrock is a no. | Need a cloud vector store without AWS | `src/lib/pinecone.ts` (commented), commented lines in `rag.ts` / `ingest.ts` |
-| **GOV-8** | **Every** saved file goes into search right away | New docs often have no vectors | `src/lib/ingest.ts` |
-| **GOV-9** | Search must know **policy vs regulation** | A rule must not count as “we already comply” | `rag.ts`, `agents.ts` |
+| **GOV-7** | Make **AWS** (Titan + Knowledge Base) the real search for policies and rules | **Done for this pass:** Titan first, then OpenAI embeddings, KB if set. Keyword if no keys. | `src/lib/aws/*`, `src/lib/rag.ts` |
+| **GOV-7b** | **Last resort only:** Pinecone — still fully commented out | Need a cloud vector store without AWS | `src/lib/pinecone.ts` |
+| **GOV-8** | **Every** saved file goes into search right away | **Done for this pass:** ingest embeds; first `/api/health` or chat backfills seed chunks | `src/lib/ingest.ts`, `ensureIndexed()` in `rag.ts` |
+| **GOV-9** | Search must know **policy vs regulation** | **Done for this pass:** retrieve splits buckets; Scout labels POLICY vs REGULATION; Auditor still scores org policies only | `rag.ts`, `agents.ts` |
 
 ---
 

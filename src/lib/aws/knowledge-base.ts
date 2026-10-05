@@ -2,7 +2,8 @@ import {
   BedrockAgentRuntimeClient,
   RetrieveCommand,
 } from "@aws-sdk/client-bedrock-agent-runtime";
-import type { Chunk, RetrievedChunk } from "../types";
+import type { Chunk, DocumentKind, RetrievedChunk } from "../types";
+import { DOCUMENT_KINDS } from "../types";
 import { awsConfigured, awsRegion, knowledgeBaseId } from "./config";
 
 let agent: BedrockAgentRuntimeClient | null = null;
@@ -32,6 +33,12 @@ export async function retrieveFromKnowledgeBase(
   return (res.retrievalResults ?? []).flatMap((item, i): RetrievedChunk[] => {
     const text = item.content?.text?.trim();
     if (!text) return [];
+    const metaKind = item.metadata?.kind;
+    const kind: DocumentKind =
+      typeof metaKind === "string" &&
+      (DOCUMENT_KINDS as readonly string[]).includes(metaKind)
+        ? (metaKind as DocumentKind)
+        : "policy";
     const chunk: Chunk = {
       id: `kb_${i}`,
       documentId: item.location?.s3Location?.uri || "knowledge-base",
@@ -41,7 +48,7 @@ export async function retrieveFromKnowledgeBase(
           (typeof item.metadata?.title === "string" && item.metadata.title) ||
           item.location?.s3Location?.uri ||
           "Knowledge Base",
-        kind: "regulation",
+        kind,
       },
     };
     return [{ chunk, score: item.score ?? 0.5 }];
