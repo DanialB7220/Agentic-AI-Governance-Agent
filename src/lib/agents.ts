@@ -79,6 +79,7 @@ export async function* runCopilot(input: {
   const orgCorpus = docs
     .filter((d) => d.kind !== "regulation")
     .map((d) => d.text);
+  const policyDocuments = docs.filter((d) => d.kind !== "regulation");
   const report = await runAuditor({
     query,
     orgName: org.name,
@@ -86,9 +87,8 @@ export async function* runCopilot(input: {
     frameworks,
     orgCorpus,
     scoutNotes,
-    docTitles: docs
-      .filter((d) => d.kind !== "regulation")
-      .map((d) => d.title),
+    policyDocuments,
+    docTitles: policyDocuments.map((d) => d.title),
   });
   await addReport(report);
 
@@ -151,13 +151,32 @@ async function runAuditor(input: {
   frameworks: FrameworkId[];
   orgCorpus: string[];
   scoutNotes: string;
+  policyDocuments: { title: string; text: string }[];
   docTitles: string[];
 }): Promise<Report> {
   const corpus = [input.orgNotes, ...input.orgCorpus].join("\n");
   const snippets = input.orgCorpus.map((t) => t.replace(/\s+/g, " "));
   const findings = CONTROLS.filter((c) =>
     input.frameworks.includes(c.framework),
-  ).map((c) => toFinding(c, corpus, snippets));
+  ).map((c) => {
+    const base = toFinding(c, corpus, snippets);
+    const policyRefs = inferPolicyRefs(c, input.policyDocuments);
+    const status: "open" | "done" =
+      base.status === "covered" ? "done" : "open";
+    return {
+      ...base,
+      policyRefs,
+      updateText:
+        base.status === "covered"
+          ? `No change required for ${c.title}; keep evidence current.`
+          : `${c.action} Update the relevant policy text in ${policyRefs.join(", ")}.`,
+      owner: pickOwner(c.framework),
+      dueDate: fmtDueDate(
+        base.status === "covered" ? 14 : base.status === "partial" ? 30 : 45,
+      ),
+      remediationStatus: status,
+    };
+  });
 
   const covered = findings.filter((f) => f.status === "covered").length;
   const coveragePct = findings.length
@@ -231,6 +250,47 @@ function inferFrameworks(query: string, org: FrameworkId[]): FrameworkId[] {
   return unique.length ? unique : ["cms-ma-pd"];
 }
 
+function inferPolicyRefs(
+  control: { title: string; requirement: string; keywords: string[] },
+  documents: { title: string; text: string }[],
+): string[] {
+  const phrases = [control.title, control.requirement, ...control.keywords];
+  const matches = documents
+    .filter((doc) => {
+      const text = `${doc.title} ${doc.text}`.toLowerCase();
+      return phrases.some((phrase) => {
+        const q = phrase.toLowerCase();
+        return q.length > 4 && text.includes(q);
+      });
+    })
+    .map((doc) => doc.title);
+
+  if (matches.length) return [...new Set(matches)].slice(0, 3);
+
+  const fallback = control.keywords
+    .map((keyword) => keyword.toLowerCase())
+    .filter((keyword) => keyword.length > 3);
+  if (fallback.length === 0) return ["Policy review"];
+  return [`${fallback[0]} policy review`];
+}
+
+function pickOwner(framework: FrameworkId) {
+  const owners: Record<FrameworkId, string> = {
+    soc2: "Security Governance Lead",
+    "pci-dss": "Security Operations Lead",
+    gdpr: "Privacy Program Manager",
+    "nist-csf": "Risk & Controls Manager",
+    "cms-ma-pd": "Market Access & Finance Lead",
+  };
+  return owners[framework] ?? "Compliance Lead";
+}
+
+function fmtDueDate(offsetDays: number) {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + offsetDays);
+  return date.toISOString().slice(0, 10);
+}
+
 function buildRoadmap(findings: GapFinding[]): RoadmapItem[] {
   const missing = findings.filter((f) => f.status === "missing");
   const partial = findings.filter((f) => f.status === "partial");
@@ -240,8 +300,12 @@ function buildRoadmap(findings: GapFinding[]): RoadmapItem[] {
       items.push({
         window,
         title: f.title,
-        detail: f.action,
+        detail: f.updateText ?? f.action,
         controlIds: [f.controlId],
+        policyRefs: f.policyRefs ?? ["Policy review"],
+        owner: f.owner ?? pickOwner(f.framework),
+        dueDate: f.dueDate ?? fmtDueDate(30),
+        status: f.remediationStatus ?? (f.status === "covered" ? "done" : "open"),
       });
     }
   };
@@ -257,6 +321,10 @@ function buildRoadmap(findings: GapFinding[]): RoadmapItem[] {
       title: "Keep the evidence pack current",
       detail: "Re-upload policies after each material change and re-run this memo.",
       controlIds: [],
+      policyRefs: ["Policy review"],
+      owner: "Compliance Lead",
+      dueDate: fmtDueDate(15),
+      status: "open",
     });
   }
   return items;
@@ -301,7 +369,11 @@ function renderReport(input: {
       `### ${FRAMEWORK_LABEL[f.framework]} — ${f.title} (${f.status})`,
       f.requirement,
       `Evidence: ${f.evidence}`,
-      `Do next: ${f.action}`,
+      `Policy target: ${(f.policyRefs ?? ["Policy review"]).join(", ")}`,
+      `Required change: ${f.updateText ?? f.action}`,
+      `Owner: ${f.owner ?? pickOwner(f.framework)}`,
+      `Due: ${f.dueDate ?? fmtDueDate(30)}`,
+      `Status: ${f.remediationStatus ?? (f.status === "covered" ? "done" : "open")}`,
       "",
     );
   }

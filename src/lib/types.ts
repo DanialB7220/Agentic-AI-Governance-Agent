@@ -50,6 +50,7 @@ export type Chunk = {
 };
 
 export type GapStatus = "covered" | "partial" | "missing";
+export type RemediationStatus = "open" | "done";
 
 export type GapFinding = {
   controlId: string;
@@ -59,6 +60,11 @@ export type GapFinding = {
   requirement: string;
   evidence: string;
   action: string;
+  policyRefs?: string[];
+  updateText?: string;
+  owner?: string;
+  dueDate?: string;
+  remediationStatus?: RemediationStatus;
 };
 
 export type RoadmapItem = {
@@ -66,6 +72,10 @@ export type RoadmapItem = {
   title: string;
   detail: string;
   controlIds: string[];
+  policyRefs?: string[];
+  owner?: string;
+  dueDate?: string;
+  status?: RemediationStatus;
 };
 
 export type Report = {

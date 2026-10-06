@@ -62,7 +62,19 @@ export default function ReportDetailPage({
                 </p>
                 <StatusBadge status={f.status} />
               </div>
-              <p className="mt-1 text-xs leading-5 text-slate-400">{f.action}</p>
+              <p className="mt-2 text-[11px] uppercase tracking-wide text-slate-500">
+                Policy target: {(f.policyRefs ?? ["Policy review"]).join(", ")}
+              </p>
+              <p className="mt-2 text-xs leading-5 text-slate-300">
+                {f.updateText ?? f.action}
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
+                <span>Owner: {f.owner ?? "Compliance Lead"}</span>
+                <span>Due: {f.dueDate ?? "TBD"}</span>
+                <span>
+                  {f.remediationStatus === "done" ? "Done" : "Open"}
+                </span>
+              </div>
             </li>
           ))}
         </ul>
@@ -78,6 +90,11 @@ export default function ReportDetailPage({
               </p>
               <p className="font-medium">{item.title}</p>
               <p className="text-slate-400">{item.detail}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
+                <span>Owner: {item.owner ?? "Compliance Lead"}</span>
+                <span>Due: {item.dueDate ?? "TBD"}</span>
+                <span>{item.status === "done" ? "Done" : "Open"}</span>
+              </div>
             </li>
           ))}
         </ul>

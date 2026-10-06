@@ -78,8 +78,8 @@ export async function loadStore(): Promise<StoreShape> {
     if (memory) return memory;
     await mkdir(DIR, { recursive: true });
     const org = await readJson<OrgProfile>("org.json", seedOrg);
-    let documents = await readJson<StoredDocument[]>("documents.json", []);
-    let chunks = await readJson<Chunk[]>("chunks.json", []);
+    const documents = await readJson<StoredDocument[]>("documents.json", []);
+    const chunks = await readJson<Chunk[]>("chunks.json", []);
     const reports = await readJson<Report[]>("reports.json", []);
     const seenRegulationIds = await readJson<string[]>(
       "seen-regulations.json",
