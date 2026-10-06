@@ -8,9 +8,11 @@ import type {
   ChatEvent,
   FrameworkId,
   GapFinding,
+  PolicyChange,
   Report,
   RetrievedChunk,
   RoadmapItem,
+  StoredDocument,
 } from "./types";
 
 const AUDIT_RE =
@@ -19,6 +21,7 @@ const AUDIT_RE =
 export async function* runCopilot(input: {
   messages: { role: "user" | "assistant"; content: string }[];
   mode?: "chat" | "analyze" | "report";
+  regulationTitle?: string;
 }): AsyncGenerator<ChatEvent> {
   const last = [...input.messages].reverse().find((m) => m.role === "user");
   if (!last?.content.trim()) {
@@ -87,8 +90,12 @@ export async function* runCopilot(input: {
     frameworks,
     orgCorpus,
     scoutNotes,
+    retrieved,
     policyDocuments,
-    docTitles: policyDocuments.map((d) => d.title),
+    regulationTitle: input.regulationTitle,
+    docTitles: docs
+      .filter((d) => d.kind !== "regulation")
+      .map((d) => d.title),
   });
   await addReport(report);
 
@@ -152,7 +159,9 @@ async function runAuditor(input: {
   orgCorpus: string[];
   scoutNotes: string;
   policyDocuments: { title: string; text: string }[];
+  retrieved: RetrievedChunk[];
   docTitles: string[];
+  regulationTitle?: string;
 }): Promise<Report> {
   const corpus = [input.orgNotes, ...input.orgCorpus].join("\n");
   const snippets = input.orgCorpus.map((t) => t.replace(/\s+/g, " "));
@@ -183,7 +192,17 @@ async function runAuditor(input: {
     ? Math.round((covered / findings.length) * 100)
     : 0;
   const roadmap = buildRoadmap(findings);
-  const title = `${input.frameworks.map((f) => FRAMEWORK_LABEL[f]).join(" / ")} readiness memo`;
+  const title = input.regulationTitle
+    ? `What to change — ${input.regulationTitle}`
+    : `${input.frameworks.map((f) => FRAMEWORK_LABEL[f]).join(" / ")} readiness memo`;
+
+  const changes = await draftPolicyChanges({
+    orgName: input.orgName,
+    retrieved: input.retrieved,
+    scoutNotes: input.scoutNotes,
+    query: input.query,
+    docTitles: input.docTitles,
+  });
 
   const structured = renderReport({
     title,
@@ -192,13 +211,15 @@ async function runAuditor(input: {
     query: input.query,
     coveragePct,
     findings,
+    changes,
     roadmap,
     docTitles: input.docTitles,
+    regulationTitle: input.regulationTitle,
   });
 
   const narrative = await completeChat({
     system:
-      "You are Auditor. Rewrite the readiness memo in clear English. Keep every finding. Do not invent evidence. Label this as an internal memo, not a CMS filing, SOC attestation, or legal opinion. Use markdown. For Johnson & Johnson, treat the org as a manufacturer / plan partner, not an MA organization, unless the org notes say otherwise.",
+      "You are Auditor. Rewrite the readiness memo in clear English. Keep every finding and every policy change. Do not invent evidence. Label this as an internal memo, not a CMS filing, SOC attestation, or legal opinion. Use markdown. For Johnson & Johnson, treat the org as a manufacturer / plan partner, not an MA organization, unless the org notes say otherwise.",
     user: `${structured}\n\nScout notes (use for context, do not treat as org evidence):\n${input.scoutNotes}`,
     maxTokens: 1800,
   });
@@ -207,25 +228,105 @@ async function runAuditor(input: {
     id: createId("rpt"),
     title,
     frameworks: input.frameworks,
-    summary: summarize(findings, coveragePct),
+    regulationTitle: input.regulationTitle,
+    summary: summarize(findings, coveragePct, changes.length),
     coveragePct,
     findings,
+    changes,
     roadmap,
     markdown: narrative || structured,
     createdAt: new Date().toISOString(),
   };
 }
 
-export async function generateStandaloneReport(frameworks: FrameworkId[]) {
+async function draftPolicyChanges(input: {
+  orgName: string;
+  retrieved: RetrievedChunk[];
+  scoutNotes: string;
+  query: string;
+  docTitles: string[];
+}): Promise<PolicyChange[]> {
+  const policies = input.retrieved.filter(
+    (r) => r.chunk.metadata.kind !== "regulation",
+  );
+  const regs = input.retrieved.filter(
+    (r) => r.chunk.metadata.kind === "regulation",
+  );
+  if (policies.length === 0 && input.docTitles.length === 0) return [];
+
+  const policyBlock = policies
+    .slice(0, 6)
+    .map(
+      (r) =>
+        `POLICY “${r.chunk.metadata.title}”:\n${r.chunk.text.slice(0, 900)}`,
+    )
+    .join("\n\n");
+  const regBlock = regs
+    .slice(0, 4)
+    .map(
+      (r) =>
+        `REGULATION “${r.chunk.metadata.title}”:\n${r.chunk.text.slice(0, 900)}`,
+    )
+    .join("\n\n");
+
+  const raw = await completeChat({
+    system:
+      'Return ONLY a JSON array of objects with keys policyTitle, issue, action. Each item is one concrete edit to a named internal policy already on file. Never treat regulation text as proof of compliance. If unsure, still propose the most likely SOP edits. No markdown.',
+    user: `Org: ${input.orgName}\nInternal policies on file: ${input.docTitles.join("; ") || "(none)"}\nQuestion: ${input.query}\n\n${regBlock || "(no regulation passages)"}\n\n${policyBlock || "(no retrieved policy passages)"}\n\nScout:\n${input.scoutNotes.slice(0, 1500)}`,
+    maxTokens: 900,
+  });
+  const fallback = () =>
+    policies.length > 0
+      ? fallbackChanges(policies)
+      : input.docTitles.slice(0, 3).map((title) => ({
+          policyTitle: title,
+          issue:
+            "This SOP is on file but may not match the new rule language we retrieved.",
+          action: `Have the owner of “${title}” compare it to the new regulation and update stale coverage-gap, cost-sharing, or marketing language.`,
+        }));
+  if (!raw) return fallback();
+  try {
+    const start = raw.indexOf("[");
+    const end = raw.lastIndexOf("]");
+    const parsed = JSON.parse(
+      start >= 0 && end > start ? raw.slice(start, end + 1) : raw,
+    ) as PolicyChange[];
+    const rows = parsed
+      .filter((row) => row.policyTitle && row.action)
+      .slice(0, 8)
+      .map((row) => ({
+        policyTitle: String(row.policyTitle).slice(0, 200),
+        issue: String(row.issue || "").slice(0, 400),
+        action: String(row.action).slice(0, 400),
+      }));
+    return rows.length > 0 ? rows : fallback();
+  } catch {
+    return fallback();
+  }
+}
+
+function fallbackChanges(policies: RetrievedChunk[]): PolicyChange[] {
+  return policies.slice(0, 3).map((r) => ({
+    policyTitle: r.chunk.metadata.title,
+    issue: "This internal document may not match the new rule language we retrieved.",
+    action: `Have the owner of “${r.chunk.metadata.title}” compare it to the new regulation and update stale coverage-gap, cost-sharing, or marketing language.`,
+  }));
+}
+
+export async function generateStandaloneReport(
+  frameworks: FrameworkId[],
+  opts?: { regulationTitle?: string; query?: string },
+) {
   const events: ChatEvent[] = [];
+  const asked =
+    opts?.query ||
+    (opts?.regulationTitle
+      ? `Analyze “${opts.regulationTitle}” against our current internal policies. List what we must change in each SOP, then a 30/60/90 plan.`
+      : `Produce an audit-style readiness report for ${frameworks.map((f) => FRAMEWORK_LABEL[f]).join(" and ")}. Include gaps, what we already cover, and a 30/60/90 plan to keep up with current requirements.`);
   for await (const event of runCopilot({
     mode: "report",
-    messages: [
-      {
-        role: "user",
-        content: `Produce an audit-style readiness report for ${frameworks.map((f) => FRAMEWORK_LABEL[f]).join(" and ")}. Include gaps, what we already cover, and a 30/60/90 plan to keep up with current requirements.`,
-      },
-    ],
+    regulationTitle: opts?.regulationTitle,
+    messages: [{ role: "user", content: asked }],
   })) {
     events.push(event);
     if (event.type === "report") return event.report;
@@ -236,6 +337,17 @@ export async function generateStandaloneReport(frameworks: FrameworkId[]) {
       ? "Report text produced but not saved."
       : "Could not generate report.",
   );
+}
+
+export async function analyzeRegulationDocument(doc: StoredDocument) {
+  const org = await getOrg();
+  const frameworks: FrameworkId[] = org.frameworks.length
+    ? org.frameworks
+    : ["cms-ma-pd"];
+  return generateStandaloneReport(frameworks, {
+    regulationTitle: doc.title,
+    query: `New regulation on file: ${doc.title}\n\n${doc.text.slice(0, 6000)}\n\nCompare this to our internal policies (not the regulation itself as evidence). List what each named SOP still has wrong and what to change.`,
+  });
 }
 
 function inferFrameworks(query: string, org: FrameworkId[]): FrameworkId[] {
@@ -330,10 +442,16 @@ function buildRoadmap(findings: GapFinding[]): RoadmapItem[] {
   return items;
 }
 
-function summarize(findings: GapFinding[], pct: number) {
+function summarize(
+  findings: GapFinding[],
+  pct: number,
+  changeCount = 0,
+) {
   const missing = findings.filter((f) => f.status === "missing").length;
   const partial = findings.filter((f) => f.status === "partial").length;
-  return `${pct}% of scored controls look covered. ${missing} missing, ${partial} partial. Internal memo only — not an attestation.`;
+  const changeBit =
+    changeCount > 0 ? ` ${changeCount} policy change(s) listed.` : "";
+  return `${pct}% of scored controls look covered. ${missing} missing, ${partial} partial.${changeBit} Internal memo only — not an attestation.`;
 }
 
 function renderReport(input: {
@@ -343,13 +461,18 @@ function renderReport(input: {
   query: string;
   coveragePct: number;
   findings: GapFinding[];
+  changes: PolicyChange[];
   roadmap: RoadmapItem[];
   docTitles: string[];
+  regulationTitle?: string;
 }) {
   const lines = [
     `# ${input.title}`,
     "",
     `**Organization:** ${input.orgName}`,
+    input.regulationTitle
+      ? `**Regulation:** ${input.regulationTitle}`
+      : "",
     `**Asked:** ${input.query}`,
     `**Coverage (heuristic):** ${input.coveragePct}% of scored controls have supporting language on file.`,
     "",
@@ -358,11 +481,26 @@ function renderReport(input: {
     "## Org snapshot",
     input.orgNotes,
     "",
-    "## Sources on file",
+    "## Sources on file (policies only)",
     input.docTitles.map((t) => `- ${t}`).join("\n") || "- None",
     "",
-    "## Findings",
-  ];
+    "## What to change in our policies",
+  ].filter((line) => line !== "");
+
+  if (input.changes.length === 0) {
+    lines.push("- No policy-specific edits extracted. Use the findings below.");
+  } else {
+    for (const c of input.changes) {
+      lines.push(
+        `### ${c.policyTitle}`,
+        `Issue: ${c.issue}`,
+        `Change: ${c.action}`,
+        "",
+      );
+    }
+  }
+
+  lines.push("## Findings");
 
   for (const f of input.findings) {
     lines.push(

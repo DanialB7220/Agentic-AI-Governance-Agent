@@ -78,6 +78,12 @@ export type RoadmapItem = {
   status?: RemediationStatus;
 };
 
+export type PolicyChange = {
+  policyTitle: string;
+  issue: string;
+  action: string;
+};
+
 export type Report = {
   id: string;
   title: string;
@@ -86,6 +92,7 @@ export type Report = {
   summary: string;
   coveragePct: number;
   findings: GapFinding[];
+  changes?: PolicyChange[];
   roadmap: RoadmapItem[];
   markdown: string;
   createdAt: string;

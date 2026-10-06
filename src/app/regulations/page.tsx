@@ -12,6 +12,7 @@ export default function RegulationsPage() {
   const [error, setError] = useState("");
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
+  const [notice, setNotice] = useState("");
 
   useEffect(() => {
     fetch("/api/regulations")
@@ -23,11 +24,13 @@ export default function RegulationsPage() {
   async function ingestItem(item: RegulationFeedItem) {
     setBusyId(item.id);
     setError("");
+    setNotice("");
     const res = await fetch("/api/regulations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(item),
     });
+    const json = await res.json();
     setBusyId(null);
     if (!res.ok) {
       setError("Ingest failed.");
@@ -36,6 +39,12 @@ export default function RegulationsPage() {
     setItems((prev) =>
       prev.map((x) => (x.id === item.id ? { ...x, ingested: true } : x)),
     );
+    if (json.report?.id) {
+      setNotice("Indexed full text and saved a “what to change” report.");
+      router.push(`/reports/${json.report.id}`);
+    } else if (json.analyzeError) {
+      setError(json.analyzeError);
+    }
   }
 
   async function analyze(item: RegulationFeedItem) {
@@ -48,6 +57,8 @@ export default function RegulationsPage() {
   async function onUpload(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
+    setNotice("");
+    setBusyId("paste");
     const res = await fetch("/api/ingest", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -59,6 +70,7 @@ export default function RegulationsPage() {
       }),
     });
     const json = await res.json();
+    setBusyId(null);
     if (!res.ok) {
       setError(json.error || "Upload failed");
       return;
@@ -78,17 +90,25 @@ export default function RegulationsPage() {
       },
       ...prev,
     ]);
+    if (json.report?.id) router.push(`/reports/${json.report.id}`);
+    else if (json.analyzeError) setError(json.analyzeError);
   }
 
   async function onFile(file: File) {
-    const form = new FormData();
-    form.set("file", file);
-    form.set("kind", "regulation");
-    form.set("title", file.name);
-    const res = await fetch("/api/ingest", { method: "POST", body: form });
-    if (!res.ok) setError("File must be readable text (.txt or .md).");
-    else {
-      const json = await res.json();
+    setError("");
+    setNotice("");
+    setBusyId("file");
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      form.set("kind", "regulation");
+      form.set("title", file.name);
+      const res = await fetch("/api/ingest", { method: "POST", body: form });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(json.error || "Use a PDF, .txt, or .md file.");
+        return;
+      }
       setItems((prev) => [
         {
           id: json.document.id,
@@ -102,6 +122,12 @@ export default function RegulationsPage() {
         },
         ...prev,
       ]);
+      if (json.report?.id) router.push(`/reports/${json.report.id}`);
+      else if (json.analyzeError) setError(json.analyzeError);
+    } catch {
+      setError("Upload failed.");
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -109,8 +135,9 @@ export default function RegulationsPage() {
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Regulations</h1>
       <p className="mt-2 text-sm text-slate-400">
-        Live-ish Federal Register feed (FTC, CFPB, SEC, OCC, HHS). Upload a rule
-        if the feed misses it. PDF comes later — paste or drop .txt / .md for now.
+        Scan the Federal Register or upload a rule (PDF, .txt, .md). Indexing
+        saves the full text into search and auto-runs a “what to change” report
+        against current internal policies.
       </p>
 
       <form onSubmit={onUpload} className="glass mt-8 grid gap-3 rounded-2xl p-4">
@@ -139,20 +166,22 @@ export default function RegulationsPage() {
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="submit"
-            disabled={!text.trim()}
+            disabled={!text.trim() || busyId !== null}
             className="h-10 cursor-pointer rounded-xl bg-amber-500 px-4 text-sm font-medium text-slate-950 hover:bg-amber-400 disabled:opacity-40"
           >
             Index text
+            {busyId === "paste" ? "…" : ""}
           </button>
           <label className="flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-white/10 px-3 text-sm text-slate-300 hover:bg-white/5">
             <Upload className="h-4 w-4" aria-hidden />
             Upload file
             <input
               type="file"
-              accept=".txt,.md,.text"
+              accept=".pdf,.txt,.md,.text,application/pdf,text/plain"
               className="sr-only"
               onChange={(e) => {
                 const file = e.target.files?.[0];
+                e.target.value = "";
                 if (file) void onFile(file);
               }}
             />
@@ -160,6 +189,7 @@ export default function RegulationsPage() {
         </div>
       </form>
 
+      {notice && <p className="mt-4 text-sm text-emerald-300">{notice}</p>}
       {error && <p className="mt-4 text-sm text-rose-300">{error}</p>}
 
       <ul className="mt-8 grid gap-3">
@@ -178,7 +208,11 @@ export default function RegulationsPage() {
                 onClick={() => void ingestItem(item)}
                 className="h-9 cursor-pointer rounded-lg border border-white/10 px-3 text-xs text-slate-200 hover:bg-white/5 disabled:opacity-40"
               >
-                {item.ingested ? "Indexed" : "Index into RAG"}
+                {item.ingested
+                  ? "Indexed"
+                  : busyId === item.id
+                    ? "Indexing + analyzing…"
+                    : "Index into RAG"}
               </button>
               <button
                 type="button"

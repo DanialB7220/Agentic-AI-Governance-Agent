@@ -17,6 +17,7 @@ export default function OrgPage() {
   const [docs, setDocs] = useState<StoredDocument[]>([]);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -200,12 +201,54 @@ export default function OrgPage() {
           placeholder="Paste the policy or a control note…"
           className="input"
         />
-        <button
-          type="submit"
-          className="h-10 w-fit cursor-pointer rounded-xl border border-white/10 px-4 text-sm text-slate-200 hover:bg-white/5"
-        >
-          Index document
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="submit"
+            className="h-10 w-fit cursor-pointer rounded-xl border border-white/10 px-4 text-sm text-slate-200 hover:bg-white/5"
+          >
+            Index document
+          </button>
+          <label className="flex h-10 cursor-pointer items-center rounded-xl border border-white/10 px-3 text-sm text-slate-300 hover:bg-white/5">
+            {uploading ? "Uploading…" : "Upload PDF / txt / md"}
+            <input
+              type="file"
+              accept=".pdf,.txt,.md,.text,application/pdf,text/plain"
+              className="sr-only"
+              disabled={uploading}
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                const formEl = e.currentTarget.form;
+                e.target.value = "";
+                if (!file) return;
+                setError("");
+                setUploading(true);
+                try {
+                  const kind = formEl
+                    ? String(new FormData(formEl).get("kind") || "policy")
+                    : "policy";
+                  const form = new FormData();
+                  form.set("file", file);
+                  form.set("title", file.name);
+                  form.set("kind", kind);
+                  const res = await fetch("/api/ingest", {
+                    method: "POST",
+                    body: form,
+                  });
+                  const json = await res.json().catch(() => ({}));
+                  if (!res.ok) {
+                    setError(json.error || "Use a PDF, .txt, or .md file.");
+                    return;
+                  }
+                  setDocs((prev) => [json.document, ...prev]);
+                } catch {
+                  setError("Upload failed.");
+                } finally {
+                  setUploading(false);
+                }
+              }}
+            />
+          </label>
+        </div>
       </form>
 
       <h2 className="mt-12 text-lg font-semibold">Documents on file</h2>

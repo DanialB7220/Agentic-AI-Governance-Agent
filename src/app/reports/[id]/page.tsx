@@ -50,6 +50,30 @@ export default function ReportDetailPage({
         {report.coveragePct}% of scored controls have supporting language
       </p>
       <p className="mt-1 text-sm text-slate-400">{report.summary}</p>
+      {report.regulationTitle ? (
+        <p className="mt-1 text-sm text-slate-500">
+          Regulation: {report.regulationTitle}
+        </p>
+      ) : null}
+
+      {report.changes && report.changes.length > 0 ? (
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold text-amber-200">
+            What to change in our policies
+          </h2>
+          <ul className="mt-3 grid gap-2">
+            {report.changes.map((c, i) => (
+              <li key={`${c.policyTitle}-${i}`} className="glass rounded-xl px-4 py-3">
+                <p className="text-sm font-medium">{c.policyTitle}</p>
+                {c.issue ? (
+                  <p className="mt-1 text-xs text-slate-400">{c.issue}</p>
+                ) : null}
+                <p className="mt-1 text-sm text-slate-300">{c.action}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       <section className="mt-8">
         <h2 className="text-sm font-semibold text-amber-200">Findings</h2>
