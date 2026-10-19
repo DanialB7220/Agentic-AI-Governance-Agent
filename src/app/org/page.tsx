@@ -2,7 +2,12 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { FRAMEWORK_LABEL } from "@/lib/frameworks";
-import type { FrameworkId, OrgProfile, StoredDocument } from "@/lib/types";
+import {
+  SCAN_AGENCIES,
+  type FrameworkId,
+  type OrgProfile,
+  type StoredDocument,
+} from "@/lib/types";
 
 const ALL_FRAMEWORKS: FrameworkId[] = [
   "cms-ma-pd",
@@ -136,6 +141,57 @@ export default function OrgPage() {
             })}
           </div>
         </fieldset>
+        <fieldset>
+          <legend className="mb-2 text-sm text-slate-300">
+            Agencies to scan
+          </legend>
+          <div className="flex flex-wrap gap-2">
+            {SCAN_AGENCIES.map((agency) => {
+              const on = org.scanAgencies.includes(agency.id);
+              return (
+                <label
+                  key={agency.id}
+                  className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm ${
+                    on
+                      ? "border-amber-400/50 bg-amber-400/10 text-amber-200"
+                      : "border-white/10 text-slate-400"
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={on}
+                    onChange={() =>
+                      setOrg({
+                        ...org,
+                        scanAgencies: on
+                          ? org.scanAgencies.filter((id) => id !== agency.id)
+                          : [...org.scanAgencies, agency.id],
+                      })
+                    }
+                  />
+                  {agency.label}
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+        <Field label="Scan keywords (comma separated)" htmlFor="keywords">
+          <input
+            id="keywords"
+            value={org.scanKeywords.join(", ")}
+            onChange={(e) =>
+              setOrg({
+                ...org,
+                scanKeywords: e.target.value
+                  .split(",")
+                  .map((word) => word.trim())
+                  .filter(Boolean),
+              })
+            }
+            className="input"
+          />
+        </Field>
         <Field label="How we actually operate" htmlFor="notes">
           <textarea
             id="notes"

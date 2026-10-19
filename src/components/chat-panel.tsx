@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, LoaderCircle, Sparkles } from "lucide-react";
+import { ArrowUp, FileUp, LoaderCircle, Sparkles } from "lucide-react";
 import { Markdown } from "./markdown";
-import type { ChatEvent, DocumentKind, Report } from "@/lib/types";
+import type { ChatEvent, DocumentKind, Report, StoredDocument } from "@/lib/types";
 
 const STARTERS = [
   {
@@ -38,6 +38,36 @@ type Message = {
   report?: Report;
 };
 
+type IngestReply = {
+  duplicate?: boolean;
+  message?: string;
+  document?: StoredDocument;
+  report?: Report;
+  analyzeError?: string;
+  error?: string;
+};
+
+function uploadReply(json: IngestReply) {
+  if (json.duplicate) {
+    return json.message || "You already uploaded this regulation.";
+  }
+  const title = json.document?.title ?? "that regulation";
+  const changes = json.report?.changes ?? [];
+  const lines = [
+    `Saved **${title}**. It stays in your regulation library.`,
+    json.report
+      ? json.report.summary
+      : json.analyzeError || "Saved. The policy comparison did not finish.",
+  ];
+  if (changes.length) {
+    lines.push("", "Policy suggestions:");
+    for (const change of changes) {
+      lines.push(`- **${change.policyTitle}** — ${change.action}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 export function ChatPanel({
   preset,
 }: {
@@ -46,7 +76,25 @@ export function ChatPanel({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState(preset ?? "");
   const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState<StoredDocument[]>([]);
   const box = useRef<HTMLTextAreaElement>(null);
+
+  function loadSaved() {
+    fetch("/api/documents")
+      .then((r) => r.json())
+      .then((j) =>
+        setSaved(
+          (j.documents ?? []).filter(
+            (doc: StoredDocument) => doc.kind === "regulation",
+          ),
+        ),
+      )
+      .catch(() => setSaved([]));
+  }
+
+  useEffect(() => {
+    loadSaved();
+  }, []);
 
   useEffect(() => {
     const presetPrompt = sessionStorage.getItem("aegis:preset");
@@ -120,6 +168,67 @@ export function ChatPanel({
     }
   }
 
+  async function uploadRegulation(file: File) {
+    if (busy) return;
+    const user: Message = {
+      id: `u_${Date.now()}`,
+      role: "user",
+      content: `Upload regulation: ${file.name}`,
+    };
+    const assistant: Message = {
+      id: `a_${Date.now()}`,
+      role: "assistant",
+      content: "",
+      status: "Saving the regulation and comparing it to your policies…",
+    };
+    const history = [...messages, user];
+    setMessages([...history, assistant]);
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.set("file", file);
+      form.set("kind", "regulation");
+      form.set(
+        "title",
+        file.name.replace(/\.(pdf|txt|md|text)$/i, "") || file.name,
+      );
+      const res = await fetch("/api/ingest", { method: "POST", body: form });
+      const json = (await res.json().catch(() => ({}))) as IngestReply;
+      if (!res.ok) {
+        setMessages([
+          ...history,
+          {
+            ...assistant,
+            status: undefined,
+            content: json.error || "Use a PDF, .txt, or .md file.",
+          },
+        ]);
+        return;
+      }
+      setMessages([
+        ...history,
+        {
+          ...assistant,
+          status: undefined,
+          content: uploadReply(json),
+          report: json.report,
+        },
+      ]);
+      loadSaved();
+    } catch (err) {
+      setMessages([
+        ...history,
+        {
+          ...assistant,
+          status: undefined,
+          content: err instanceof Error ? err.message : "Upload failed.",
+        },
+      ]);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-4 py-6">
       {messages.length === 0 ? (
@@ -131,10 +240,28 @@ export function ChatPanel({
             See how a new rule lands on your org, then get a plan.
           </h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">
-            Scout reads CMS-4208-F3 and your current SOPs. Auditor maps them to
-            J&amp;J manufacturer workflows (not a full TLC program) and writes an
-            internal readiness memo.
+            Drop your own regulation here (PDF, txt, or md). Aegis saves it,
+            compares it to the internal policies, and tells you if you already
+            uploaded that same rule.
           </p>
+          {saved.length > 0 ? (
+            <div className="mt-6">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                Saved regulations
+              </p>
+              <ul className="mt-2 grid gap-2">
+                {saved.map((doc) => (
+                  <li key={doc.id} className="text-sm text-slate-300">
+                    {doc.title}
+                    <span className="text-slate-500">
+                      {" "}
+                      · saved {doc.createdAt.slice(0, 10)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
             {STARTERS.map((s) => (
               <button
@@ -181,12 +308,20 @@ export function ChatPanel({
                   </p>
                 )}
                 {m.report && (
-                  <Link
-                    href={`/reports/${m.report.id}`}
-                    className="mt-3 inline-flex cursor-pointer text-sm font-medium text-amber-300 hover:text-amber-200"
-                  >
-                    Open report · {m.report.coveragePct}% covered
-                  </Link>
+                  <p className="mt-3 flex flex-wrap gap-3">
+                    <Link
+                      href={`/reports/${m.report.id}`}
+                      className="cursor-pointer text-sm font-medium text-amber-300 hover:text-amber-200"
+                    >
+                      Open report · {m.report.coveragePct}% covered
+                    </Link>
+                    <a
+                      href={`/api/reports/${m.report.id}/pdf`}
+                      className="cursor-pointer text-sm font-medium text-amber-300 hover:text-amber-200"
+                    >
+                      Export policy suggestions (PDF)
+                    </a>
+                  </p>
                 )}
               </div>
             </article>
@@ -201,6 +336,21 @@ export function ChatPanel({
           void send(input);
         }}
       >
+        <label className="flex h-11 w-11 cursor-pointer items-center justify-center rounded-xl text-slate-300 hover:bg-white/5">
+          <FileUp className="h-4 w-4" aria-hidden />
+          <span className="sr-only">Upload a regulation</span>
+          <input
+            type="file"
+            accept=".pdf,.txt,.md,.text,application/pdf,text/plain"
+            className="sr-only"
+            disabled={busy}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) void uploadRegulation(file);
+            }}
+          />
+        </label>
         <label htmlFor="copilot-input" className="sr-only">
           Message Aegis
         </label>
@@ -217,7 +367,7 @@ export function ChatPanel({
               void send(input);
             }
           }}
-          placeholder="Ask about a new rule, or paste one…"
+          placeholder="Ask about a rule, or upload one with the file button…"
           className="min-h-11 flex-1 resize-none bg-transparent px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none"
         />
         <button

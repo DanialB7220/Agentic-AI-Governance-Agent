@@ -7,9 +7,11 @@ import {
   BookOpen,
   Building2,
   FileBarChart,
+  Gauge,
   ListChecks,
   MessageSquare,
   Plug,
+  ScrollText,
   Shield,
 } from "lucide-react";
 
@@ -19,6 +21,8 @@ const NAV = [
   { href: "/regulations", label: "Regulations", icon: BookOpen },
   { href: "/org", label: "Organization", icon: Building2 },
   { href: "/reports", label: "Reports", icon: FileBarChart },
+  { href: "/risk", label: "Risk", icon: Gauge },
+  { href: "/records", label: "Records", icon: ScrollText },
   { href: "/integrate", label: "Integrate", icon: Plug },
 ];
 

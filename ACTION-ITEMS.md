@@ -11,7 +11,7 @@ It should:
 5. **Keep records**  
 6. Show **compliance risk**
 
-This repo is a thin first cut (chat + keyword gaps + local files). Below is what to **add or change** so it actually does the job.
+The items below are implemented in this repo: scan, upload, RAG, policy changes, reports, records in SQLite, and a risk page. Pinecone stays commented. Word upload is still later.
 
 Same list in the app: **Tickets**.
 

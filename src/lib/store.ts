@@ -1,8 +1,19 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { countRecords, readKind, readOne, replaceAll } from "./db";
+import { riskForStatus } from "./frameworks";
 import { seedDocuments, seedOrg } from "./seed";
 import { createId } from "./ids";
-import type { Chunk, OrgProfile, Report, StoredDocument } from "./types";
+import {
+  SCAN_AGENCIES,
+  type ActivityEvent,
+  type Chunk,
+  type OrgProfile,
+  type PolicyChange,
+  type Report,
+  type ScanState,
+  type StoredDocument,
+} from "./types";
 
 const DIR = path.join(process.cwd(), "data", "runtime");
 
@@ -26,13 +37,122 @@ type StoreShape = {
   chunks: Chunk[];
   reports: Report[];
   seenRegulationIds: string[];
+  activity: ActivityEvent[];
+  scan: ScanState;
 };
+
+const EMPTY_SCAN: ScanState = { lastScanAt: null, newIds: [] };
+
+const AGENCY_ALIASES: Record<string, string> = {
+  "department-of-health-and-human-services":
+    "health-and-human-services-department",
+  "office-of-the-comptroller-of-the-currency": "comptroller-of-the-currency",
+};
+
+function cleanAgencies(ids: string[] | undefined) {
+  const valid = new Set<string>(SCAN_AGENCIES.map((agency) => agency.id));
+  const next = [
+    ...new Set(
+      (ids ?? []).map((id) => AGENCY_ALIASES[id] ?? id).filter((id) => valid.has(id)),
+    ),
+  ];
+  return next.length ? next : [...seedOrg.scanAgencies];
+}
+
+function normalizeOrg(org: Partial<OrgProfile> | null | undefined): OrgProfile {
+  const base = org ?? {};
+  return {
+    ...seedOrg,
+    ...base,
+    frameworks: base.frameworks?.length ? base.frameworks : seedOrg.frameworks,
+    scanAgencies: cleanAgencies(base.scanAgencies),
+    scanKeywords: base.scanKeywords ?? seedOrg.scanKeywords,
+    jurisdictions: base.jurisdictions ?? seedOrg.jurisdictions,
+    updatedAt: base.updatedAt || seedOrg.updatedAt,
+  };
+}
+
+function normalizeReport(report: Report): Report {
+  return {
+    ...report,
+    scope: report.scope || report.summary,
+    policiesChecked: report.policiesChecked ?? [],
+    findings: (report.findings ?? []).map((finding) => ({
+      ...finding,
+      risk: finding.risk ?? riskForStatus(finding.status),
+    })),
+    changes: (report.changes ?? []).map((change, index) =>
+      normalizeChange(change, `${report.id}-chg-${index}`, report.createdAt, index),
+    ),
+  };
+}
+
+function dueOn(createdAt: string | undefined, index: number) {
+  const date = new Date(createdAt || Date.now());
+  if (Number.isNaN(date.getTime())) date.setTime(Date.now());
+  date.setDate(date.getDate() + (index === 0 ? 30 : index === 1 ? 60 : 90));
+  return date.toISOString().slice(0, 10);
+}
+
+function normalizeChange(
+  change: Partial<PolicyChange>,
+  id: string,
+  createdAt?: string,
+  index = 0,
+): PolicyChange {
+  const status = change.status ?? "open";
+  return {
+    id: change.id || id,
+    policyTitle: change.policyTitle || "Policy",
+    issue: change.issue || "",
+    action: change.action || "",
+    owner: change.owner || "Policy owner",
+    dueDate: change.dueDate || dueOn(createdAt, index),
+    status:
+      status === "in_progress" || status === "done" || status === "open"
+        ? status
+        : "open",
+  };
+}
+
+function remember(
+  state: StoreShape,
+  event: Omit<ActivityEvent, "id" | "at">,
+) {
+  state.activity = [
+    {
+      ...event,
+      id: createId("act"),
+      at: new Date().toISOString(),
+    },
+    ...state.activity,
+  ].slice(0, 200);
+}
 
 let memory: StoreShape | null = null;
 let chain: Promise<unknown> = Promise.resolve();
+let lockDepth = 0;
 
 function withLock<T>(fn: () => Promise<T>): Promise<T> {
-  const run = chain.then(fn, fn);
+  if (lockDepth > 0) return fn();
+  const run = chain.then(
+    async () => {
+      lockDepth += 1;
+      try {
+        return await fn();
+      } finally {
+        lockDepth -= 1;
+      }
+    },
+    async () => {
+      lockDepth += 1;
+      try {
+        return await fn();
+      } finally {
+        lockDepth -= 1;
+      }
+    },
+  );
   chain = run.then(
     () => undefined,
     () => undefined,
@@ -49,26 +169,27 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
   }
 }
 
-async function persist(state: StoreShape) {
-  await mkdir(DIR, { recursive: true });
-  await Promise.all([
-    writeFile(path.join(DIR, "org.json"), JSON.stringify(state.org, null, 2)),
-    writeFile(
-      path.join(DIR, "documents.json"),
-      JSON.stringify(state.documents, null, 2),
-    ),
-    writeFile(
-      path.join(DIR, "chunks.json"),
-      JSON.stringify(state.chunks, null, 2),
-    ),
-    writeFile(
-      path.join(DIR, "reports.json"),
-      JSON.stringify(state.reports, null, 2),
-    ),
-    writeFile(
-      path.join(DIR, "seen-regulations.json"),
-      JSON.stringify(state.seenRegulationIds, null, 2),
-    ),
+function persist(state: StoreShape) {
+  replaceAll([
+    { kind: "org", id: "current", body: state.org },
+    ...state.documents.map((doc) => ({
+      kind: "document",
+      id: doc.id,
+      body: doc,
+    })),
+    ...state.chunks.map((chunk) => ({
+      kind: "chunk",
+      id: chunk.id,
+      body: chunk,
+    })),
+    ...state.reports.map((report) => ({
+      kind: "report",
+      id: report.id,
+      body: report,
+    })),
+    { kind: "meta", id: "seen", body: state.seenRegulationIds },
+    { kind: "meta", id: "activity", body: state.activity },
+    { kind: "meta", id: "scan", body: state.scan },
   ]);
 }
 
@@ -77,6 +198,18 @@ export async function loadStore(): Promise<StoreShape> {
   return withLock(async () => {
     if (memory) return memory;
     await mkdir(DIR, { recursive: true });
+    if (countRecords() > 0) {
+      memory = {
+        org: normalizeOrg(readOne<OrgProfile>("org", "current", seedOrg)),
+        documents: readKind<StoredDocument>("document"),
+        chunks: readKind<Chunk>("chunk"),
+        reports: readKind<Report>("report").map(normalizeReport),
+        seenRegulationIds: readOne<string[]>("meta", "seen", []),
+        activity: readOne<ActivityEvent[]>("meta", "activity", []),
+        scan: readOne<ScanState>("meta", "scan", EMPTY_SCAN),
+      };
+      return memory;
+    }
     const org = await readJson<OrgProfile>("org.json", seedOrg);
     let documents = await readJson<StoredDocument[]>("documents.json", []);
     let chunks = await readJson<Chunk[]>("chunks.json", []);
@@ -92,7 +225,7 @@ export async function loadStore(): Promise<StoreShape> {
     );
     for (const doc of seedDocuments) byId.set(doc.id, doc);
     const nextDocs = [...byId.values()];
-    const nextOrg = orgIsLegacy ? seedOrg : org;
+    const nextOrg = normalizeOrg(orgIsLegacy ? seedOrg : org);
     const idsChanged =
       nextDocs.length !== documents.length ||
       nextDocs.some((d) => !documents.find((x) => x.id === d.id));
@@ -105,14 +238,25 @@ export async function loadStore(): Promise<StoreShape> {
         org: nextOrg,
         documents: nextDocs,
         chunks: nextDocs.flatMap(chunkDocument),
-        reports,
+        reports: reports.map(normalizeReport),
         seenRegulationIds,
+        activity: [],
+        scan: EMPTY_SCAN,
       };
-      await persist(memory);
+      persist(memory);
       return memory;
     }
 
-    memory = { org, documents, chunks, reports, seenRegulationIds };
+    memory = {
+      org: normalizeOrg(org),
+      documents,
+      chunks,
+      reports: reports.map(normalizeReport),
+      seenRegulationIds,
+      activity: [],
+      scan: EMPTY_SCAN,
+    };
+    persist(memory);
     return memory;
   });
 }
@@ -155,7 +299,11 @@ export async function saveOrg(patch: Partial<OrgProfile>) {
       ...patch,
       updatedAt: new Date().toISOString(),
     };
-    await persist(state);
+    remember(state, {
+      action: "org",
+      detail: `Updated organization snapshot for ${state.org.name}.`,
+    });
+    persist(state);
     return state.org;
   });
 }
@@ -187,7 +335,15 @@ export async function addDocument(
       ...state.chunks.filter((c) => c.documentId !== doc.id),
       ...freshChunks,
     ];
-    await persist(state);
+    remember(state, {
+      action: "upload",
+      detail:
+        doc.kind === "regulation"
+          ? `Saved regulation “${doc.title}”.`
+          : `Saved ${doc.kind} “${doc.title}”.`,
+      documentId: doc.id,
+    });
+    persist(state);
     return { doc, chunks: freshChunks };
   });
 }
@@ -201,7 +357,7 @@ export async function saveChunks(updated: Chunk[]) {
     const state = await loadStore();
     const byId = new Map(updated.map((c) => [c.id, c]));
     state.chunks = state.chunks.map((c) => byId.get(c.id) ?? c);
-    await persist(state);
+    persist(state);
   });
 }
 
@@ -217,8 +373,35 @@ export async function addReport(report: Report) {
   return withLock(async () => {
     const state = await loadStore();
     state.reports = [report, ...state.reports.filter((r) => r.id !== report.id)];
-    await persist(state);
+    remember(state, {
+      action: "report",
+      detail: `Saved a new report “${report.title}”.`,
+      reportId: report.id,
+      documentId: report.documentId,
+    });
+    persist(state);
     return report;
+  });
+}
+
+export async function updateReport(
+  id: string,
+  patch: (report: Report) => Report,
+  activity?: Omit<ActivityEvent, "id" | "at" | "reportId">,
+) {
+  return withLock(async () => {
+    const state = await loadStore();
+    const current = state.reports.find((report) => report.id === id);
+    if (!current) return null;
+    const next = normalizeReport(patch(current));
+    state.reports = state.reports.map((report) =>
+      report.id === id ? next : report,
+    );
+    if (activity) {
+      remember(state, { ...activity, reportId: id });
+    }
+    persist(state);
+    return next;
   });
 }
 
@@ -228,11 +411,38 @@ export async function markRegulationsSeen(ids: string[]) {
     const set = new Set(state.seenRegulationIds);
     for (const id of ids) set.add(id);
     state.seenRegulationIds = [...set];
-    await persist(state);
+    state.scan = { ...state.scan, newIds: [] };
+    persist(state);
     return state.seenRegulationIds;
   });
 }
 
 export async function getSeenRegulationIds() {
   return (await loadStore()).seenRegulationIds;
+}
+
+export async function listActivity() {
+  return (await loadStore()).activity;
+}
+
+export async function logActivity(event: Omit<ActivityEvent, "id" | "at">) {
+  return withLock(async () => {
+    const state = await loadStore();
+    remember(state, event);
+    persist(state);
+    return state.activity[0];
+  });
+}
+
+export async function getScan() {
+  return (await loadStore()).scan;
+}
+
+export async function saveScan(scan: ScanState) {
+  return withLock(async () => {
+    const state = await loadStore();
+    state.scan = scan;
+    persist(state);
+    return state.scan;
+  });
 }

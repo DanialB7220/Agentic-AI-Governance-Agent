@@ -22,6 +22,7 @@ export async function* runCopilot(input: {
   messages: { role: "user" | "assistant"; content: string }[];
   mode?: "chat" | "analyze" | "report";
   regulationTitle?: string;
+  documentId?: string;
 }): AsyncGenerator<ChatEvent> {
   const last = [...input.messages].reverse().find((m) => m.role === "user");
   if (!last?.content.trim()) {
@@ -91,6 +92,7 @@ export async function* runCopilot(input: {
     scoutNotes,
     retrieved,
     regulationTitle: input.regulationTitle,
+    documentId: input.documentId,
     docTitles: docs
       .filter((d) => d.kind !== "regulation")
       .map((d) => d.title),
@@ -159,6 +161,7 @@ async function runAuditor(input: {
   retrieved: RetrievedChunk[];
   docTitles: string[];
   regulationTitle?: string;
+  documentId?: string;
 }): Promise<Report> {
   const corpus = [input.orgNotes, ...input.orgCorpus].join("\n");
   const snippets = input.orgCorpus.map((t) => t.replace(/\s+/g, " "));
@@ -175,13 +178,15 @@ async function runAuditor(input: {
     ? `What to change — ${input.regulationTitle}`
     : `${input.frameworks.map((f) => FRAMEWORK_LABEL[f]).join(" / ")} readiness memo`;
 
-  const changes = await draftPolicyChanges({
-    orgName: input.orgName,
-    retrieved: input.retrieved,
-    scoutNotes: input.scoutNotes,
-    query: input.query,
-    docTitles: input.docTitles,
-  });
+  const changes = stampChanges(
+    await draftPolicyChanges({
+      orgName: input.orgName,
+      retrieved: input.retrieved,
+      scoutNotes: input.scoutNotes,
+      query: input.query,
+      docTitles: input.docTitles,
+    }),
+  );
 
   const structured = renderReport({
     title,
@@ -207,7 +212,12 @@ async function runAuditor(input: {
     id: createId("rpt"),
     title,
     frameworks: input.frameworks,
+    documentId: input.documentId,
     regulationTitle: input.regulationTitle,
+    scope: `Readiness review for ${input.orgName}${
+      input.regulationTitle ? ` against ${input.regulationTitle}` : ""
+    }. Internal policies were checked. This is not a CMS filing.`,
+    policiesChecked: input.docTitles,
     summary: summarize(findings, coveragePct, changes.length),
     coveragePct,
     findings,
@@ -224,7 +234,7 @@ async function draftPolicyChanges(input: {
   scoutNotes: string;
   query: string;
   docTitles: string[];
-}): Promise<PolicyChange[]> {
+}): Promise<Array<Pick<PolicyChange, "policyTitle" | "issue" | "action">>> {
   const policies = input.retrieved.filter(
     (r) => r.chunk.metadata.kind !== "regulation",
   );
@@ -269,7 +279,7 @@ async function draftPolicyChanges(input: {
     const end = raw.lastIndexOf("]");
     const parsed = JSON.parse(
       start >= 0 && end > start ? raw.slice(start, end + 1) : raw,
-    ) as PolicyChange[];
+    ) as Array<Pick<PolicyChange, "policyTitle" | "issue" | "action">>;
     const rows = parsed
       .filter((row) => row.policyTitle && row.action)
       .slice(0, 8)
@@ -284,7 +294,27 @@ async function draftPolicyChanges(input: {
   }
 }
 
-function fallbackChanges(policies: RetrievedChunk[]): PolicyChange[] {
+function dueIn(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function stampChanges(
+  changes: Array<Pick<PolicyChange, "policyTitle" | "issue" | "action">>,
+): PolicyChange[] {
+  return changes.map((change, index) => ({
+    ...change,
+    id: createId("chg"),
+    owner: "Policy owner",
+    dueDate: dueIn(index === 0 ? 30 : index === 1 ? 60 : 90),
+    status: "open" as const,
+  }));
+}
+
+function fallbackChanges(
+  policies: RetrievedChunk[],
+): Array<Pick<PolicyChange, "policyTitle" | "issue" | "action">> {
   return policies.slice(0, 3).map((r) => ({
     policyTitle: r.chunk.metadata.title,
     issue: "This internal document may not match the new rule language we retrieved.",
@@ -294,7 +324,7 @@ function fallbackChanges(policies: RetrievedChunk[]): PolicyChange[] {
 
 export async function generateStandaloneReport(
   frameworks: FrameworkId[],
-  opts?: { regulationTitle?: string; query?: string },
+  opts?: { regulationTitle?: string; query?: string; documentId?: string },
 ) {
   const events: ChatEvent[] = [];
   const asked =
@@ -305,6 +335,7 @@ export async function generateStandaloneReport(
   for await (const event of runCopilot({
     mode: "report",
     regulationTitle: opts?.regulationTitle,
+    documentId: opts?.documentId,
     messages: [{ role: "user", content: asked }],
   })) {
     events.push(event);
@@ -324,6 +355,7 @@ export async function analyzeRegulationDocument(doc: StoredDocument) {
     ? org.frameworks
     : ["cms-ma-pd"];
   return generateStandaloneReport(frameworks, {
+    documentId: doc.id,
     regulationTitle: doc.title,
     query: `New regulation on file: ${doc.title}\n\n${doc.text.slice(0, 6000)}\n\nCompare this to our internal policies (not the regulation itself as evidence). List what each named SOP still has wrong and what to change.`,
   });
@@ -425,6 +457,7 @@ function renderReport(input: {
         `### ${c.policyTitle}`,
         `Issue: ${c.issue}`,
         `Change: ${c.action}`,
+        `Owner: ${c.owner || "Policy owner"} · Due: ${c.dueDate || "unset"} · ${c.status || "open"}`,
         "",
       );
     }

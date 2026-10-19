@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Upload } from "lucide-react";
 import type { RegulationFeedItem } from "@/lib/types";
@@ -13,6 +14,7 @@ export default function RegulationsPage() {
   const [title, setTitle] = useState("");
   const [text, setText] = useState("");
   const [notice, setNotice] = useState("");
+  const [savedReportId, setSavedReportId] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/regulations")
@@ -25,6 +27,7 @@ export default function RegulationsPage() {
     setBusyId(item.id);
     setError("");
     setNotice("");
+    setSavedReportId(null);
     const res = await fetch("/api/regulations", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -39,12 +42,32 @@ export default function RegulationsPage() {
     setItems((prev) =>
       prev.map((x) => (x.id === item.id ? { ...x, ingested: true } : x)),
     );
+    if (json.duplicate) {
+      setNotice(json.message || "You already uploaded this regulation.");
+      setSavedReportId(json.report?.id ?? null);
+      return;
+    }
     if (json.report?.id) {
       setNotice("Indexed full text and saved a “what to change” report.");
       router.push(`/reports/${json.report.id}`);
     } else if (json.analyzeError) {
       setError(json.analyzeError);
     }
+  }
+
+  async function markReviewed() {
+    const ids = items.filter((item) => item.isNew).map((item) => item.id);
+    if (ids.length === 0) return;
+    const res = await fetch("/api/regulations/seen", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids }),
+    });
+    if (!res.ok) {
+      setError("Could not mark those rules as reviewed.");
+      return;
+    }
+    setItems((prev) => prev.map((item) => ({ ...item, isNew: false })));
   }
 
   async function analyze(item: RegulationFeedItem) {
@@ -58,6 +81,7 @@ export default function RegulationsPage() {
     e.preventDefault();
     setError("");
     setNotice("");
+    setSavedReportId(null);
     setBusyId("paste");
     const res = await fetch("/api/ingest", {
       method: "POST",
@@ -77,6 +101,11 @@ export default function RegulationsPage() {
     }
     setTitle("");
     setText("");
+    if (json.duplicate) {
+      setNotice(json.message || "You already uploaded this regulation.");
+      setSavedReportId(json.report?.id ?? null);
+      return;
+    }
     setItems((prev) => [
       {
         id: json.document.id,
@@ -87,6 +116,7 @@ export default function RegulationsPage() {
         agency: "Upload",
         type: "Upload",
         ingested: true,
+        isNew: false,
       },
       ...prev,
     ]);
@@ -97,6 +127,7 @@ export default function RegulationsPage() {
   async function onFile(file: File) {
     setError("");
     setNotice("");
+    setSavedReportId(null);
     setBusyId("file");
     try {
       const form = new FormData();
@@ -109,6 +140,11 @@ export default function RegulationsPage() {
         setError(json.error || "Use a PDF, .txt, or .md file.");
         return;
       }
+      if (json.duplicate) {
+        setNotice(json.message || "You already uploaded this regulation.");
+        setSavedReportId(json.report?.id ?? null);
+        return;
+      }
       setItems((prev) => [
         {
           id: json.document.id,
@@ -119,6 +155,7 @@ export default function RegulationsPage() {
           agency: "Upload",
           type: "Upload",
           ingested: true,
+          isNew: false,
         },
         ...prev,
       ]);
@@ -189,14 +226,45 @@ export default function RegulationsPage() {
         </div>
       </form>
 
-      {notice && <p className="mt-4 text-sm text-emerald-300">{notice}</p>}
+      {notice && (
+        <p className="mt-4 text-sm text-emerald-300">
+          {notice}{" "}
+          {savedReportId ? (
+            <Link
+              href={`/reports/${savedReportId}`}
+              className="font-medium text-amber-300 hover:text-amber-200"
+            >
+              Open the saved report
+            </Link>
+          ) : null}
+        </p>
+      )}
       {error && <p className="mt-4 text-sm text-rose-300">{error}</p>}
+
+      {items.some((item) => item.isNew) ? (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3">
+          <p className="text-sm text-amber-100">
+            {(() => {
+              const count = items.filter((item) => item.isNew).length;
+              return `${count} new rule${count === 1 ? "" : "s"} since you last reviewed this feed.`;
+            })()}
+          </p>
+          <button
+            type="button"
+            onClick={() => void markReviewed()}
+            className="h-9 cursor-pointer rounded-lg bg-amber-500 px-3 text-xs font-medium text-slate-950 hover:bg-amber-400"
+          >
+            Mark reviewed
+          </button>
+        </div>
+      ) : null}
 
       <ul className="mt-8 grid gap-3">
         {items.map((item) => (
           <li key={item.id} className="glass rounded-2xl p-4">
             <p className="text-[11px] uppercase tracking-wide text-slate-500">
               {item.agency} · {item.publishedAt} · {item.type}
+              {item.isNew ? " · new" : ""}
               {item.ingested ? " · indexed" : ""}
             </p>
             <h2 className="mt-1 text-sm font-semibold text-white">{item.title}</h2>

@@ -1,14 +1,5 @@
-import { getSeenRegulationIds, listDocuments, markRegulationsSeen } from "./store";
-import type { RegulationFeedItem } from "./types";
-
-const AGENCIES = [
-  "centers-for-medicare-medicaid-services",
-  "department-of-health-and-human-services",
-  "federal-trade-commission",
-  "consumer-financial-protection-bureau",
-  "securities-and-exchange-commission",
-  "office-of-the-comptroller-of-the-currency",
-];
+import { getOrg, getSeenRegulationIds, listDocuments } from "./store";
+import { SCAN_AGENCIES, type RegulationFeedItem } from "./types";
 
 type FrDoc = {
   document_number: string;
@@ -21,7 +12,11 @@ type FrDoc = {
 };
 
 export async function fetchRegulationFeed(): Promise<RegulationFeedItem[]> {
-  const seen = new Set(await getSeenRegulationIds());
+  const [org, seenIds] = await Promise.all([getOrg(), getSeenRegulationIds()]);
+  const seen = new Set(seenIds);
+  const agencies = org.scanAgencies.length
+    ? org.scanAgencies
+    : SCAN_AGENCIES.map((agency) => agency.id);
   const ingested = new Set(
     (await listDocuments())
       .filter((d) => d.source === "federal-register")
@@ -34,36 +29,38 @@ export async function fetchRegulationFeed(): Promise<RegulationFeedItem[]> {
     url.searchParams.set("order", "newest");
     url.searchParams.append("conditions[type][]", "RULE");
     url.searchParams.append("conditions[type][]", "PRORULE");
-    for (const agency of AGENCIES) {
+    for (const agency of agencies) {
       url.searchParams.append("conditions[agencies][]", agency);
     }
+    const term = org.scanKeywords.map((word) => word.trim()).filter(Boolean).join(" ");
+    if (term) url.searchParams.set("conditions[term]", term);
 
     const res = await fetch(url.toString(), { cache: "no-store" });
     if (!res.ok) throw new Error(`Federal Register ${res.status}`);
     const json = (await res.json()) as { results?: FrDoc[] };
-    const items = (json.results ?? []).map((doc) => toItem(doc, ingested));
-    const ids = items.map((i) => i.id);
-    await markRegulationsSeen(ids);
-    return items.map((item) => ({
-      ...item,
-      // first time we see an id it is "new"
-      ingested: ingested.has(item.id),
-    }));
-  } catch {
+    return (json.results ?? []).map((doc) => toItem(doc, ingested, seen));
+  } catch (err) {
+    console.error("Federal Register feed failed", err);
     return fallbackFeed(seen, ingested);
   }
 }
 
-function toItem(doc: FrDoc, ingested: Set<string>): RegulationFeedItem {
+function toItem(
+  doc: FrDoc,
+  ingested: Set<string>,
+  seen: Set<string>,
+): RegulationFeedItem {
+  const id = `fr_${doc.document_number}`;
   return {
-    id: `fr_${doc.document_number}`,
+    id,
     title: doc.title,
     abstract: doc.abstract || "No abstract provided.",
     url: doc.html_url,
     publishedAt: doc.publication_date,
     agency: doc.agencies?.map((a) => a.name).join(", ") || "Federal Register",
     type: doc.type,
-    ingested: ingested.has(`fr_${doc.document_number}`),
+    ingested: ingested.has(id),
+    isNew: !seen.has(id),
   };
 }
 
@@ -83,6 +80,7 @@ function fallbackFeed(
       agency: "Centers for Medicare & Medicaid Services",
       type: "Rule",
       ingested: ingested.has("fr_2026_06600"),
+      isNew: !seen.has("fr_2026_06600"),
     },
     {
       id: "fr_demo_ftc_ai",
@@ -95,6 +93,7 @@ function fallbackFeed(
       agency: "Federal Trade Commission",
       type: "Proposed Rule",
       ingested: ingested.has("fr_demo_ftc_ai"),
+      isNew: !seen.has("fr_demo_ftc_ai"),
     },
     {
       id: "fr_demo_cfpb",
@@ -106,6 +105,7 @@ function fallbackFeed(
       agency: "Consumer Financial Protection Bureau",
       type: "Rule",
       ingested: ingested.has("fr_demo_cfpb"),
+      isNew: !seen.has("fr_demo_cfpb"),
     },
     {
       id: "fr_demo_hhs",
@@ -117,8 +117,8 @@ function fallbackFeed(
       agency: "Department of Health and Human Services",
       type: "Proposed Rule",
       ingested: ingested.has("fr_demo_hhs"),
+      isNew: !seen.has("fr_demo_hhs"),
     },
   ];
-  void seen;
   return items;
 }

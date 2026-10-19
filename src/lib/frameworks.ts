@@ -1,4 +1,4 @@
-import type { FrameworkId, GapFinding, GapStatus } from "./types";
+import type { FrameworkId, GapFinding, GapStatus, RiskLevel } from "./types";
 
 export type ControlDef = {
   id: string;
@@ -270,6 +270,12 @@ export function evidenceBlurb(hits: string[], snippets: string[]) {
     : `Keywords matched: ${hits.join(", ")}.`;
 }
 
+export function riskForStatus(status: GapStatus): RiskLevel {
+  if (status === "missing") return "high";
+  if (status === "partial") return "medium";
+  return "low";
+}
+
 export function toFinding(
   control: ControlDef,
   corpus: string,
@@ -281,6 +287,7 @@ export function toFinding(
     framework: control.framework,
     title: control.title,
     status,
+    risk: riskForStatus(status),
     requirement: control.requirement,
     evidence: evidenceBlurb(hits, snippets),
     action: control.action,

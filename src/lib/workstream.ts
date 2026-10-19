@@ -25,19 +25,21 @@ export const EPICS: TicketGroup[] = [
     tickets: [
       {
         id: "GOV-1",
-        status: "partial",
+        status: "done",
         title: "Check for new rules on a timer",
-        what: "Today the Federal Register is only fetched when you open Regulations or chat.",
-        change: "Add a scheduled job (every few hours) that pulls new rules and stores them even if nobody is in the app.",
-        where: "src/lib/regulations.ts + new API/cron route",
+        what: "The feed used to load only when someone opened a page.",
+        change:
+          "The server scans every 4 hours after startup, and GET /api/cron/scan can be called by an external scheduler.",
+        where: "src/instrumentation.ts, src/lib/scan.ts, src/app/api/cron/scan/route.ts",
       },
       {
         id: "GOV-2",
-        status: "partial",
+        status: "done",
         title: "Show what is actually new",
-        what: "We remember seen IDs, but the UI does not clearly alert “3 new rules since yesterday.”",
-        change: "Add a New badge, a count, and a simple list of “new since last visit.” Optional email later.",
-        where: "src/app/regulations/page.tsx, store",
+        what: "Seen IDs existed, but the page never said which rules were new.",
+        change:
+          "Regulations shows a count and a New mark until you click Mark reviewed.",
+        where: "src/app/regulations/page.tsx, src/app/api/regulations/seen/route.ts",
       },
       {
         id: "GOV-3",
@@ -50,11 +52,12 @@ export const EPICS: TicketGroup[] = [
       },
       {
         id: "GOV-4",
-        status: "todo",
+        status: "done",
         title: "Scan the agencies this company cares about",
-        what: "Agency list is hardcoded (CMS, FTC, etc.).",
-        change: "Let Organization pick agencies / keywords so scan matches J&J (or any client), not a generic list.",
-        where: "org profile in types.ts + regulations.ts",
+        what: "Agency list used to be hardcoded.",
+        change:
+          "Organization picks agencies and keywords. The feed and the timer use that list.",
+        where: "src/app/org/page.tsx, src/lib/regulations.ts",
       },
     ],
   },
@@ -90,7 +93,7 @@ export const EPICS: TicketGroup[] = [
     tickets: [
       {
         id: "GOV-7",
-        status: "partial",
+        status: "done",
         title: "Use AWS as the real search (not only laptop JSON)",
         what: "Search used to be mostly local word-match.",
         change:
@@ -99,10 +102,11 @@ export const EPICS: TicketGroup[] = [
       },
       {
         id: "GOV-7b",
-        status: "todo",
+        status: "done",
         title: "Last resort: Pinecone (keep commented)",
-        what: "If AWS never happens, we still need a cloud vector store.",
-        change: "Pinecone upsert/query is already written but fully commented out in src/lib/pinecone.ts and rag.ts. Do not uncomment unless Bedrock is a no.",
+        what: "Pinecone stays available only if AWS is refused later.",
+        change:
+          "Left fully commented. Search stays on AWS when keys exist, otherwise OpenAI, Azure, or keyword.",
         where: "src/lib/pinecone.ts, commented lines in rag.ts / ingest.ts",
       },
       {
@@ -141,11 +145,12 @@ export const EPICS: TicketGroup[] = [
       },
       {
         id: "GOV-11",
-        status: "todo",
+        status: "done",
         title: "Each change has an owner and a due date",
-        what: "Roadmap is only 0–30 / 30–60 / 60–90 buckets.",
-        change: "Findings need owner, due date, and status (open / in progress / done).",
-        where: "src/lib/types.ts, reports UI",
+        what: "Roadmap used to be only 0–30 / 30–60 / 60–90 buckets.",
+        change:
+          "Each policy change has an owner, due date, and status (open / in progress / done). You can edit them on the report.",
+        where: "src/lib/types.ts, src/app/reports/[id]/page.tsx",
       },
     ],
   },
@@ -156,19 +161,21 @@ export const EPICS: TicketGroup[] = [
     tickets: [
       {
         id: "GOV-12",
-        status: "partial",
+        status: "done",
         title: "Richer audit report (not only a chat memo)",
-        what: "Reports are markdown memos with a coverage %.",
-        change: "Add sections: scope, which rule, which policies were checked, findings table, what to change, who signed. Export PDF.",
-        where: "src/app/reports, agents.ts",
+        what: "Reports used to be a memo and a coverage percent.",
+        change:
+          "Each report has scope, the rule, policies checked, findings with risk, policy changes, sign-off, and a PDF export.",
+        where: "src/app/reports, src/lib/agents.ts, src/lib/policy-pdf.ts",
       },
       {
         id: "GOV-13",
-        status: "todo",
+        status: "done",
         title: "Do not overwrite old reports",
-        what: "New runs just append in a JSON file. No version, no “this report is for rule X on date Y.”",
-        change: "Every run is a new record linked to a regulation + date. You can open any past report.",
-        where: "store.ts, reports/[id]",
+        what: "Runs needed a clear link to the rule and the date.",
+        change:
+          "Every run is a new report id tied to the regulation and date. History on the report lists earlier runs for that rule.",
+        where: "src/lib/store.ts, src/app/reports/[id]/page.tsx",
       },
     ],
   },
@@ -179,19 +186,21 @@ export const EPICS: TicketGroup[] = [
     tickets: [
       {
         id: "GOV-14",
-        status: "todo",
+        status: "done",
         title: "Activity log",
-        what: "No log of “user uploaded SOP” or “scan found 2 new rules.”",
-        change: "Write an activity list: time, action, document/report id. Show it on a Records page.",
-        where: "new store file + src/app/records/page.tsx",
+        what: "There was no log of uploads, scans, or reports.",
+        change:
+          "Uploads, scans, reports, edits, and sign-offs are written to an activity list on Records.",
+        where: "src/lib/store.ts, src/app/records/page.tsx",
       },
       {
         id: "GOV-15",
-        status: "todo",
+        status: "done",
         title: "Stop using only laptop JSON for records",
-        what: "data/runtime JSON is wiped per machine and is not a real record system.",
-        change: "Move org, documents, reports, and the log to a real database (or S3 + DB). JSON is fine only for local play.",
-        where: "src/lib/store.ts",
+        what: "Records lived only in loose JSON files.",
+        change:
+          "Org, documents, chunks, reports, and the activity log now persist in data/runtime/aegis.db (SQLite). Existing JSON is imported once.",
+        where: "src/lib/db.ts, src/lib/store.ts",
       },
     ],
   },
@@ -202,19 +211,21 @@ export const EPICS: TicketGroup[] = [
     tickets: [
       {
         id: "GOV-16",
-        status: "todo",
+        status: "done",
         title: "Risk level on every gap",
-        what: "Findings are only covered / partial / missing. No high / medium / low risk.",
-        change: "Add risk (high/medium/low) based on the rule + gap. Show it on the report.",
-        where: "types.ts, frameworks.ts, report UI",
+        what: "Findings were only covered / partial / missing.",
+        change:
+          "Missing is high, partial is medium, covered is low. The report shows the level.",
+        where: "src/lib/frameworks.ts, src/app/reports/[id]/page.tsx",
       },
       {
         id: "GOV-17",
-        status: "todo",
+        status: "done",
         title: "Risk dashboard",
-        what: "There is no home that shows overall risk, open gaps, new rules this week.",
-        change: "Add a Risk (or Dashboard) page: overall score, open high risks, new regulations, last audit date.",
-        where: "new src/app/risk/page.tsx",
+        what: "There was no leadership view of risk.",
+        change:
+          "Risk shows coverage, open high gaps, open policy changes, rules saved this week, and the last audit.",
+        where: "src/app/risk/page.tsx, src/app/api/risk/route.ts",
       },
     ],
   },

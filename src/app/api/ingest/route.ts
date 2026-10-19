@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { jsonError } from "@/lib/http";
 import { analyzeRegulationDocument } from "@/lib/agents";
+import { alreadySavedPayload, findSavedRegulation } from "@/lib/duplicates";
 import { textFromUpload } from "@/lib/extract-upload";
 import { ingestDocument } from "@/lib/ingest";
 import { DOCUMENT_KINDS, FRAMEWORKS } from "@/lib/types";
@@ -18,6 +19,19 @@ const JsonBody = z.object({
   id: z.string().optional(),
   analyze: z.boolean().optional(),
 });
+
+async function saveOrReject(body: z.infer<typeof JsonBody>) {
+  const { analyze, ...docInput } = body;
+  if (docInput.kind === "regulation") {
+    const existing = await findSavedRegulation({
+      text: docInput.text,
+      id: docInput.id,
+    });
+    if (existing) return alreadySavedPayload(existing);
+  }
+  const doc = await ingestDocument(docInput);
+  return maybeAnalyze(doc, analyze !== false);
+}
 
 async function maybeAnalyze(
   doc: Awaited<ReturnType<typeof ingestDocument>>,
@@ -66,15 +80,12 @@ export async function POST(req: Request) {
           "Could not read that upload. Use PDF, .txt, or .md.",
         );
       }
-      const doc = await ingestDocument(parsed.data);
-      return Response.json(await maybeAnalyze(doc, analyze));
+      return Response.json(await saveOrReject({ ...parsed.data, analyze }));
     }
 
     const parsed = JsonBody.safeParse(await req.json());
     if (!parsed.success) return jsonError("Invalid ingest payload.");
-    const { analyze, ...body } = parsed.data;
-    const doc = await ingestDocument(body);
-    return Response.json(await maybeAnalyze(doc, analyze !== false));
+    return Response.json(await saveOrReject(parsed.data));
   } catch (err) {
     return jsonError(err instanceof Error ? err.message : "Ingest failed.", 500);
   }

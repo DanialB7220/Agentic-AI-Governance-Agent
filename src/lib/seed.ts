@@ -6,6 +6,12 @@ export const seedOrg: OrgProfile = {
   size: "Enterprise",
   jurisdictions: ["United States", "EU", "global affiliates"],
   frameworks: ["cms-ma-pd", "soc2"],
+  scanAgencies: [
+    "centers-for-medicare-medicaid-services",
+    "health-and-human-services-department",
+    "federal-trade-commission",
+  ],
+  scanKeywords: ["Medicare", "Part D"],
   notes:
     "Client engagement: map CMS-4208-F3 / CMS-4212-F (CY2027 MA/Part D final rule, 91 FR 17384) onto existing J&J manufacturer, patient-support, medical-legal-regulatory, and market-access workflows. J&J is not an MA organization; primary exposure is Manufacturer Discount Program, selected-drug / MFP interactions, insulin and vaccine cost-sharing rules, TrOOP, and any MA/Part D marketing or plan-partner programs. Seed policies below are demo stand-ins, not real J&J SOPs.",
   updatedAt: new Date().toISOString(),

@@ -15,12 +15,23 @@ export const DOCUMENT_KINDS = [
 ] as const;
 export type DocumentKind = (typeof DOCUMENT_KINDS)[number];
 
+export const SCAN_AGENCIES = [
+  { id: "centers-for-medicare-medicaid-services", label: "CMS" },
+  { id: "health-and-human-services-department", label: "HHS" },
+  { id: "federal-trade-commission", label: "FTC" },
+  { id: "consumer-financial-protection-bureau", label: "CFPB" },
+  { id: "securities-and-exchange-commission", label: "SEC" },
+  { id: "comptroller-of-the-currency", label: "OCC" },
+] as const;
+
 export type OrgProfile = {
   name: string;
   industry: string;
   size: string;
   jurisdictions: string[];
   frameworks: FrameworkId[];
+  scanAgencies: string[];
+  scanKeywords: string[];
   notes: string;
   updatedAt: string;
 };
@@ -50,12 +61,15 @@ export type Chunk = {
 };
 
 export type GapStatus = "covered" | "partial" | "missing";
+export type RiskLevel = "high" | "medium" | "low";
+export type ChangeStatus = "open" | "in_progress" | "done";
 
 export type GapFinding = {
   controlId: string;
   framework: FrameworkId;
   title: string;
   status: GapStatus;
+  risk: RiskLevel;
   requirement: string;
   evidence: string;
   action: string;
@@ -69,23 +83,46 @@ export type RoadmapItem = {
 };
 
 export type PolicyChange = {
+  id: string;
   policyTitle: string;
   issue: string;
   action: string;
+  owner: string;
+  dueDate: string;
+  status: ChangeStatus;
 };
 
 export type Report = {
   id: string;
   title: string;
   frameworks: FrameworkId[];
+  documentId?: string;
   regulationTitle?: string;
+  scope: string;
+  policiesChecked: string[];
   summary: string;
   coveragePct: number;
   findings: GapFinding[];
   changes?: PolicyChange[];
   roadmap: RoadmapItem[];
   markdown: string;
+  signedOffBy?: string;
+  signedOffAt?: string;
   createdAt: string;
+};
+
+export type ActivityEvent = {
+  id: string;
+  at: string;
+  action: "upload" | "scan" | "report" | "sign-off" | "change" | "org";
+  detail: string;
+  documentId?: string;
+  reportId?: string;
+};
+
+export type ScanState = {
+  lastScanAt: string | null;
+  newIds: string[];
 };
 
 export type RetrievedChunk = {
@@ -110,4 +147,5 @@ export type RegulationFeedItem = {
   agency: string;
   type: string;
   ingested: boolean;
+  isNew: boolean;
 };
