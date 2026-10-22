@@ -8,7 +8,6 @@ import {
   Building2,
   FileBarChart,
   Gauge,
-  ListChecks,
   MessageSquare,
   Plug,
   ScrollText,
@@ -17,7 +16,6 @@ import {
 
 const NAV = [
   { href: "/", label: "Copilot", icon: MessageSquare },
-  { href: "/workstream", label: "Tickets", icon: ListChecks },
   { href: "/regulations", label: "Regulations", icon: BookOpen },
   { href: "/org", label: "Organization", icon: Building2 },
   { href: "/reports", label: "Reports", icon: FileBarChart },

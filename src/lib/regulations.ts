@@ -1,3 +1,4 @@
+import { SAMPLE_REGULATIONS } from "./sample-regulations";
 import { getOrg, getSeenRegulationIds, listDocuments } from "./store";
 import { SCAN_AGENCIES, type RegulationFeedItem } from "./types";
 
@@ -12,17 +13,25 @@ type FrDoc = {
 };
 
 export async function fetchRegulationFeed(): Promise<RegulationFeedItem[]> {
-  const [org, seenIds] = await Promise.all([getOrg(), getSeenRegulationIds()]);
+  const [org, seenIds, documents] = await Promise.all([
+    getOrg(),
+    getSeenRegulationIds(),
+    listDocuments(),
+  ]);
   const seen = new Set(seenIds);
   const agencies = org.scanAgencies.length
     ? org.scanAgencies
     : SCAN_AGENCIES.map((agency) => agency.id);
   const ingested = new Set(
-    (await listDocuments())
+    documents
       .filter((d) => d.source === "federal-register")
       .map((d) => d.id),
   );
+  const savedSampleIds = new Set(
+    documents.filter((d) => d.kind === "regulation").map((d) => d.id),
+  );
 
+  let feed: RegulationFeedItem[];
   try {
     const url = new URL("https://www.federalregister.gov/api/v1/documents.json");
     url.searchParams.set("per_page", "12");
@@ -38,11 +47,31 @@ export async function fetchRegulationFeed(): Promise<RegulationFeedItem[]> {
     const res = await fetch(url.toString(), { cache: "no-store" });
     if (!res.ok) throw new Error(`Federal Register ${res.status}`);
     const json = (await res.json()) as { results?: FrDoc[] };
-    return (json.results ?? []).map((doc) => toItem(doc, ingested, seen));
+    feed = (json.results ?? []).map((doc) => toItem(doc, ingested, seen));
   } catch (err) {
     console.error("Federal Register feed failed", err);
-    return fallbackFeed(seen, ingested);
+    feed = fallbackFeed(seen, ingested);
   }
+
+  const feedIds = new Set(feed.map((item) => item.id));
+  const samples = SAMPLE_REGULATIONS.filter(
+    (sample) => savedSampleIds.has(sample.id) && !feedIds.has(sample.id),
+  ).map((sample) => toSampleItem(sample));
+  return [...samples, ...feed];
+}
+
+function toSampleItem(sample: (typeof SAMPLE_REGULATIONS)[number]): RegulationFeedItem {
+  return {
+    id: sample.id,
+    title: sample.title,
+    abstract: sample.abstract,
+    url: "",
+    publishedAt: sample.publishedAt,
+    agency: "Sample assumption",
+    type: "Sample",
+    ingested: true,
+    isNew: false,
+  };
 }
 
 function toItem(

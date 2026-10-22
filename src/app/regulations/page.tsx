@@ -55,6 +55,23 @@ export default function RegulationsPage() {
     }
   }
 
+  async function addSamples() {
+    setBusyId("samples");
+    setError("");
+    setNotice("");
+    setSavedReportId(null);
+    const res = await fetch("/api/regulations/samples", { method: "POST" });
+    const json = await res.json().catch(() => ({}));
+    setBusyId(null);
+    if (!res.ok) {
+      setError(json.error || "Could not add sample regulations.");
+      return;
+    }
+    const fresh = await fetch("/api/regulations").then((r) => r.json());
+    setItems(fresh.items ?? []);
+    setNotice(json.message || "Sample regulations saved.");
+  }
+
   async function markReviewed() {
     const ids = items.filter((item) => item.isNew).map((item) => item.id);
     if (ids.length === 0) return;
@@ -172,9 +189,11 @@ export default function RegulationsPage() {
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Regulations</h1>
       <p className="mt-2 text-sm text-slate-400">
-        Scan the Federal Register or upload a rule (PDF, .txt, .md). Indexing
-        saves the full text into search and auto-runs a “what to change” report
-        against current internal policies.
+        Scan the Federal Register, paste a rule, or add sample regulations
+        written as assumptions for a manufacturer like Johnson &amp; Johnson.
+        Indexing a real rule saves the full text and runs a “what to change”
+        report against current internal policies. Samples are saved for search;
+        use Analyze vs org when you want that report.
       </p>
 
       <form onSubmit={onUpload} className="glass mt-8 grid gap-3 rounded-2xl p-4">
@@ -208,6 +227,14 @@ export default function RegulationsPage() {
           >
             Index text
             {busyId === "paste" ? "…" : ""}
+          </button>
+          <button
+            type="button"
+            disabled={busyId !== null}
+            onClick={() => void addSamples()}
+            className="h-10 cursor-pointer rounded-xl border border-white/10 px-4 text-sm text-slate-200 hover:bg-white/5 disabled:opacity-40"
+          >
+            {busyId === "samples" ? "Adding samples…" : "Add sample regulations"}
           </button>
           <label className="flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-white/10 px-3 text-sm text-slate-300 hover:bg-white/5">
             <Upload className="h-4 w-4" aria-hidden />
