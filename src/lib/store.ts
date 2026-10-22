@@ -2,6 +2,8 @@ import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { countRecords, readKind, readOne, replaceAll } from "./db";
 import { riskForStatus } from "./frameworks";
+import { SAMPLE_REGULATIONS } from "./sample-regulations";
+import { mentionsClient, scrubJson } from "./scrub-names";
 import { seedDocuments, seedOrg } from "./seed";
 import { createId } from "./ids";
 import {
@@ -28,6 +30,7 @@ const LEGACY_DEMO_IDS = new Set([
 function isKeepDocument(doc: StoredDocument) {
   if (LEGACY_DEMO_IDS.has(doc.id) || doc.id.startsWith("fr_demo_")) return false;
   if (seedDocuments.some((s) => s.id === doc.id)) return true;
+  if (doc.id.startsWith("sample_")) return true;
   return doc.source === "upload" || doc.source === "federal-register";
 }
 
@@ -208,6 +211,7 @@ export async function loadStore(): Promise<StoreShape> {
         activity: readOne<ActivityEvent[]>("meta", "activity", []),
         scan: readOne<ScanState>("meta", "scan", EMPTY_SCAN),
       };
+      if (scrubMemory(memory) || ensureBuiltInSamples(memory)) persist(memory);
       return memory;
     }
     const org = await readJson<OrgProfile>("org.json", seedOrg);
@@ -219,12 +223,14 @@ export async function loadStore(): Promise<StoreShape> {
       [],
     );
 
-    const orgIsLegacy = !org.name.toLowerCase().includes("johnson");
+    const orgIsLegacy = mentionsClient(org.name);
     const byId = new Map(
       documents.filter(isKeepDocument).map((d) => [d.id, d]),
     );
     for (const doc of seedDocuments) byId.set(doc.id, doc);
-    const nextDocs = [...byId.values()];
+    const nextDocs = mentionsClient(JSON.stringify([...byId.values()]))
+      ? scrubJson([...byId.values()])
+      : [...byId.values()];
     const nextOrg = normalizeOrg(orgIsLegacy ? seedOrg : org);
     const idsChanged =
       nextDocs.length !== documents.length ||
@@ -243,7 +249,8 @@ export async function loadStore(): Promise<StoreShape> {
         activity: [],
         scan: EMPTY_SCAN,
       };
-      persist(memory);
+      if (ensureBuiltInSamples(memory)) persist(memory);
+      else persist(memory);
       return memory;
     }
 
@@ -256,9 +263,53 @@ export async function loadStore(): Promise<StoreShape> {
       activity: [],
       scan: EMPTY_SCAN,
     };
-    persist(memory);
+    if (ensureBuiltInSamples(memory)) persist(memory);
+    else persist(memory);
     return memory;
   });
+}
+
+function scrubMemory(state: StoreShape) {
+  const before = JSON.stringify(state);
+  const staleName =
+    mentionsClient(before) ||
+    before.includes("Demo Manufacturer") ||
+    /drug manufacturer/i.test(before);
+  if (!staleName) return false;
+  state.org = scrubJson(state.org);
+  state.org.name = seedOrg.name;
+  state.org.industry = seedOrg.industry;
+  if (state.org.notes.startsWith("Demo tenant:")) state.org.notes = seedOrg.notes;
+  state.documents = scrubJson(state.documents);
+  state.chunks = scrubJson(state.chunks);
+  state.reports = scrubJson(state.reports);
+  state.activity = scrubJson(state.activity);
+  return true;
+}
+
+function ensureBuiltInSamples(state: StoreShape) {
+  let changed = false;
+  for (const sample of SAMPLE_REGULATIONS) {
+    const existing = state.documents.find((doc) => doc.id === sample.id);
+    if (existing?.text === sample.text && existing.title === sample.title) continue;
+    const doc: StoredDocument = {
+      id: sample.id,
+      title: sample.title,
+      kind: "regulation",
+      source: "seed",
+      framework: "cms-ma-pd",
+      publishedAt: sample.publishedAt,
+      createdAt: existing?.createdAt ?? `${sample.publishedAt}T00:00:00.000Z`,
+      text: sample.text,
+    };
+    state.documents = [doc, ...state.documents.filter((item) => item.id !== sample.id)];
+    state.chunks = [
+      ...state.chunks.filter((chunk) => chunk.documentId !== sample.id),
+      ...chunkDocument(doc),
+    ];
+    changed = true;
+  }
+  return changed;
 }
 
 export function chunkDocument(doc: StoredDocument): Chunk[] {

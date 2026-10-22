@@ -235,7 +235,7 @@ export const CONTROLS: ControlDef[] = [
       "supplemental benefits",
     ],
     action:
-      "If J&J co-markets or funds SSBCI-like extras with MA partners, map copy to each partner’s posted criteria.",
+      "If the healthcare company co-markets or funds SSBCI-like extras with MA partners, map copy to each partner’s posted criteria.",
   },
   {
     id: "nist-detect",

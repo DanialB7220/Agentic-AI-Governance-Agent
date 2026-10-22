@@ -1,10 +1,10 @@
 # Aegis — Governance copilot
 
-Barebones Next.js app for a **copilot-style compliance assistant**. Current engagement: help **Johnson & Johnson** stay aligned with **CMS-4208-F3 / CMS-4212-F** (CY2027 MA / Part D final rule, 91 FR 17384) using **their existing policies and workflows**. You drop in the rule (or the Federal Register feed). The app looks at how the org actually runs today, then drafts an **internal readiness memo**: gaps, what you already cover, and a 30/60/90-day plan.
+Barebones Next.js app for a **copilot-style compliance assistant**. Current engagement: help **Healthcare Manufacturer** stay aligned with **CMS-4208-F3 / CMS-4212-F** (CY2027 MA / Part D final rule, 91 FR 17384) using **their existing policies and workflows**. You drop in the rule (or the Federal Register feed). The app looks at how the org actually runs today, then drafts an **internal readiness memo**: gaps, what you already cover, and a 30/60/90-day plan.
 
 This is **not** a CMS filing, Manufacturer Discount Program agreement, SOC 2 attestation, PCI ROC, legal opinion, or a full GRC / TLC program. Primary framework is **`cms-ma-pd`**. Light SOC 2 / GDPR / NIST hooks remain.
 
-**LLMs:** this repo uses the **public OpenAI API**. The J&J client cutover uses **Azure OpenAI** (same code path, different env). **AWS Bedrock** is RAG only (Titan + optional Knowledge Base), not chat.
+**LLMs:** this repo uses the **public OpenAI API**. The client cutover uses **Azure OpenAI** (same code path, different env). **AWS Bedrock** is RAG only (Titan + optional Knowledge Base), not chat.
 
 Product name in the UI: **Aegis**. Repo: `Agentic-AI-Governance-Agent`. Demo checklist: [`ACTION-ITEMS.md`](./ACTION-ITEMS.md) and `/workstream`.
 
@@ -20,7 +20,7 @@ A teammate should be able to:
 4. Get a saved audit-style memo they can open later
 5. Call the same pipeline from another app over HTTP
 
-The first cut is local-file storage plus **OpenAI API for chat** (this project) and **AWS Bedrock for RAG** (Titan embeddings + optional Knowledge Base). Azure OpenAI is wired for the **J&J client** — leave `OPENAI_API_KEY` empty there so traffic cannot hit api.openai.com. You can run without any cloud; then retrieval is keyword-only and memos use the control catalog.
+The first cut is local-file storage plus **OpenAI API for chat** (this project) and **AWS Bedrock for RAG** (Titan embeddings + optional Knowledge Base). Azure OpenAI is wired for the **client** — leave `OPENAI_API_KEY` empty there so traffic cannot hit api.openai.com. You can run without any cloud; then retrieval is keyword-only and memos use the control catalog.
 
 ---
 
@@ -48,7 +48,7 @@ Think of Aegis as **four layers**, all inside one Next.js process. There is no s
 │  frameworks.ts control catalog + gap scoring                │
 │  ingest.ts     chunk text + persist                         │
 │  store.ts      JSON files on disk                           │
-│  azure/*       Azure OpenAI for the J&J client cutover            │
+│  azure/*       Azure OpenAI for the client cutover            │
 │  llm/*         Public OpenAI API (this project’s default chat)    │
 │  aws/*         Bedrock Titan + Knowledge Base retrieve            │
 │  regulations.ts Federal Register client                           │
@@ -59,7 +59,7 @@ Think of Aegis as **four layers**, all inside one Next.js process. There is no s
    data/runtime/*.json  OpenAI API     AWS Bedrock     Federal Register
    (gitignored)         chat (dev)     RAG (optional)  (optional live API)
                         Azure OpenAI
-                        (J&J client)
+                        (client)
 ```
 
 **Rule of thumb:** pages and API routes are thin. If you are changing *behavior* (how a report is scored, how RAG works, what an org looks like), you almost always want `src/lib/`, not a `page.tsx`.
@@ -70,7 +70,7 @@ Think of Aegis as **four layers**, all inside one Next.js process. There is no s
 2. Browser `POST`s JSON to `/api/chat` or `/api/reports`.
 3. The route handler validates with **Zod**, then calls `runCopilot()` in `src/lib/agents.ts`.
 4. `runCopilot` loads org + docs from the JSON store, **retrieves** similar chunks, and asks **Scout** to interpret the question against that context.
-5. If the ask looks like a gap/audit/report, **Auditor** scores controls in `frameworks.ts` against *org policies only* (not the regulation text, so a rule cannot “prove” itself covered). It writes findings + a 30/60/90 roadmap, optionally asks the chat LLM (OpenAI here, Azure at J&J) to rewrite the memo, and saves a `Report`.
+5. If the ask looks like a gap/audit/report, **Auditor** scores controls in `frameworks.ts` against *org policies only* (not the regulation text, so a rule cannot “prove” itself covered). It writes findings + a 30/60/90 roadmap, optionally asks the chat LLM (OpenAI here, Azure for the client) to rewrite the memo, and saves a `Report`.
 6. Chat streams **NDJSON** events (`status`, `delta`, `report`, `done`) so the UI can show “Scout is retrieving…” then the memo. The reports page just waits for a JSON `{ report }`.
 
 Same functions are re-exported at `/api/v1/*` so another product can skip the UI.
@@ -85,11 +85,11 @@ Same functions are re-exported at `/api/v1/*` so another product can skip the UI
 | `src/components/` | Shared UI: shell, chat, markdown renderer, status badges. Client components (`"use client"`). |
 | `src/lib/` | The product: agents, RAG, store, types, seed. Importable from API routes (Node runtime). |
 | `src/lib/llm/` | Public OpenAI API chat + embeddings. Default for this repo. |
-| `src/lib/azure/` | Azure OpenAI for the J&J client. Used when `OPENAI_API_KEY` is unset. |
+| `src/lib/azure/` | Azure OpenAI for the client. Used when `OPENAI_API_KEY` is unset. |
 | `src/lib/aws/` | Bedrock Titan embeddings + Knowledge Base retrieve. No chat on Bedrock. |
 | `src/lib/types.ts` | Shared TypeScript types. UI, API, and store all import this. Change it first. |
 | `data/runtime/` | Live JSON store created on first boot. Gitignored. Each teammate has their own. |
-| `src/lib/seed.ts` | Demo org (Johnson & Johnson) + CMS-4208-F3 briefing + stand-in SOPs. |
+| `src/lib/seed.ts` | Demo org (Healthcare Manufacturer) + CMS-4208-F3 briefing + stand-in SOPs. |
 | `src/lib/workstream.ts` | Product gaps for `/workstream`. Same as `ACTION-ITEMS.md`. |
 | `.env.example` | Documented env vars. Copy to `.env.local` (also gitignored). |
 | `next.config.ts` | Marks AWS SDK as server-external. Pins Turbopack root to this repo. |
@@ -149,7 +149,7 @@ Agentic-AI-Governance-Agent/
         │   └── openai.ts     public OpenAI API; falls through to Azure
         ├── azure/
         │   ├── config.ts
-        │   └── openai.ts     J&J Azure chat.completions + embeddings
+        │   └── openai.ts     Azure chat.completions + embeddings
         └── aws/
             ├── config.ts
             ├── embeddings.ts Titan InvokeModel
@@ -222,13 +222,13 @@ This is **not** safe for multiple server instances. Fine for `next dev`.
 
 **What:** Public OpenAI Chat Completions (`gpt-4o` by default) via the official `openai` npm package.
 
-**Why:** Fast local/teammate loop. J&J will not use this endpoint in production.
+**Why:** Fast local/teammate loop. The client will not use this endpoint in production.
 
 **How:** `src/lib/llm/openai.ts`. `completeChat()` sends system + user. If `OPENAI_API_KEY` is missing, it falls through to Azure. If both are missing, agents use a template fallback so the demo still runs.
 
-### Azure OpenAI (chat — J&J client)
+### Azure OpenAI (chat — client)
 
-**What:** Microsoft-hosted OpenAI models behind a J&J Azure resource. Same Chat Completions API, different endpoint and **deployment names**.
+**What:** Microsoft-hosted OpenAI models behind a client Azure resource. Same Chat Completions API, different endpoint and **deployment names**.
 
 **Why:** Client requirement: data stays in their Azure tenant, not api.openai.com. Scout and Auditor use the same function names as this repo.
 
@@ -254,7 +254,7 @@ This is **not** safe for multiple server instances. Fine for `next dev`.
 
 **What:** `text-embedding-3-small` on the public OpenAI API, or the same family as an Azure deployment.
 
-**Why:** If AWS is not configured, we still want semantic search. This repo prefers OpenAI embeddings; J&J prefers Azure.
+**Why:** If AWS is not configured, we still want semantic search. This repo prefers OpenAI embeddings; the client prefers Azure.
 
 **How:** `embedWithOpenAIOrAzure` in `llm/openai.ts`. Titan still wins when AWS is on (`src/lib/embeddings.ts`). Do not mix Titan, OpenAI, and Azure vectors in the same `chunks.json` — pick one path and delete `data/runtime/` if you switch.
 
@@ -291,7 +291,7 @@ Scout gets retrieved chunks. Auditor scores against the **full org corpus** (pol
 
 **Why:** We refused to paste copyrighted TSC/PCI standard text. The FR extract is a U.S. government work. We also need scoring that works **without** an LLM so teammates can demo offline. Keywords are a known-good baseline; the chat LLM only rewrites prose.
 
-**How:** `toFinding(control, corpus, snippets)` → `covered` / `partial` / `missing`. Coverage % = covered / scored. Roadmap buckets missing → 0–30, partial → 30–60, covered follow-ups → 60–90. J&J findings must not treat plan-only obligations (SEPs, D-SNP) as manufacturer gaps.
+**How:** `toFinding(control, corpus, snippets)` → `covered` / `partial` / `missing`. Coverage % = covered / scored. Roadmap buckets missing → 0–30, partial → 30–60, covered follow-ups → 60–90. Manufacturer findings must not treat plan-only obligations (SEPs, D-SNP) as manufacturer gaps.
 
 ### Federal Register API
 
@@ -331,14 +331,14 @@ Scout gets retrieved chunks. Auditor scores against the **full org corpus** (pol
 
 | Route | Function |
 |---|---|
-| `/` Copilot | Chat. Scout then (if needed) Auditor. Starters already target CMS-4208-F3 vs J&J. |
+| `/` Copilot | Chat. Scout then (if needed) Auditor. Starters already target CMS-4208-F3 vs our policies. |
 | `/workstream` | What to add/change so this is a real governance product. |
 | `/regulations` | Federal Register feed. Index a rule into RAG, or paste / upload `.txt` / `.md`. |
-| `/org` | Org snapshot + policy/evidence ingest. Seeded as Johnson & Johnson. |
+| `/org` | Org snapshot + policy/evidence ingest. Seeded as Healthcare Manufacturer. |
 | `/reports` | Saved memos. Button to generate a CMS MA/Part D memo without chat. |
 | `/integrate` | Curl examples for `/api/v1/*`. |
 
-Seed tenant: **Johnson & Johnson** in `src/lib/seed.ts` (demo SOPs, not real J&J documents). Rule briefing: CMS-4208-F3 PDF on govinfo.
+Seed tenant: **Healthcare Manufacturer** in `src/lib/seed.ts` (demo SOPs, not real client documents). Rule briefing: CMS-4208-F3 PDF on govinfo.
 
 ---
 
@@ -399,7 +399,7 @@ Request:
 {
   "mode": "chat | analyze | report",
   "messages": [
-    { "role": "user", "content": "CMS-4208-F3 gap report for J&J" }
+    { "role": "user", "content": "CMS-4208-F3 gap report for our policies" }
   ]
 }
 ```
@@ -467,7 +467,7 @@ cp .env.example .env.local   # optional; app runs without OpenAI, Azure, or AWS
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Click **CMS-4208-F3 vs J&J** on the copilot home, or open `/workstream`.
+Open [http://localhost:3000](http://localhost:3000). Click **CMS-4208-F3 vs our policies** on the copilot home, or open `/workstream`.
 
 ```bash
 npm run lint
@@ -476,7 +476,7 @@ npm run build
 
 Node 22 is what we used. Scripts: `dev`, `build`, `start`, `lint`.
 
-### OpenAI (this project) vs Azure (J&J) vs AWS RAG
+### OpenAI (this project) vs Azure  vs AWS RAG
 
 Without keys, retrieval is keyword search and Scout/Auditor use the control catalog. That is enough to demo.
 
@@ -484,9 +484,9 @@ Without keys, retrieval is keyword search and Scout/Auditor use the control cata
 
 1. Copy `.env.example` → `.env.local`
 2. Set `OPENAI_API_KEY` (optional `OPENAI_MODEL=gpt-4o`)
-3. Do not put J&J production keys in teammate laptops
+3. Do not put production keys in teammate laptops
 
-**Chat — J&J client (Azure OpenAI)**
+**Chat — client (Azure OpenAI)**
 
 1. Leave `OPENAI_API_KEY` empty
 2. In Azure AI Foundry, deploy a chat model (e.g. GPT-4o)
@@ -497,7 +497,7 @@ Without keys, retrieval is keyword search and Scout/Auditor use the control cata
 1. Set `AWS_REGION` + `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` (or `AWS_BEARER_TOKEN_BEDROCK`)
 2. In the Bedrock console, enable Titan Embeddings V2
 3. Optional: create a Knowledge Base and set `BEDROCK_KNOWLEDGE_BASE_ID`
-4. If you are not using AWS yet: OpenAI embeddings locally, Azure embeddings at J&J
+4. If you are not using AWS yet: OpenAI embeddings locally, Azure embeddings for the client
 
 **RAG last resort (Pinecone) — off by default**
 
@@ -508,8 +508,8 @@ If Bedrock never happens, there is a Pinecone upsert/query path in `src/lib/pine
 | `OPENAI_API_KEY` | This project’s chat + embeddings |
 | `OPENAI_MODEL` | default `gpt-4o` |
 | `OPENAI_EMBEDDING_MODEL` | default `text-embedding-3-small` |
-| `AZURE_OPENAI_ENDPOINT` | `https://YOUR_RESOURCE.openai.azure.com` (J&J) |
-| `AZURE_OPENAI_API_KEY` | Azure OpenAI key (J&J) |
+| `AZURE_OPENAI_ENDPOINT` | `https://YOUR_RESOURCE.openai.azure.com`  |
+| `AZURE_OPENAI_API_KEY` | Azure OpenAI key  |
 | `AZURE_OPENAI_API_VERSION` | default `2024-10-21` |
 | `AZURE_OPENAI_DEPLOYMENT` | Azure chat deployment name |
 | `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | Azure embeddings if AWS is off |
@@ -542,7 +542,7 @@ Suggested split:
 
 | Area | Files |
 |---|---|
-| Chat (OpenAI here / Azure at J&J) | `src/lib/agents.ts`, `src/lib/llm/*`, `src/lib/azure/*`, `src/components/chat-panel.tsx` |
+| Chat (OpenAI here / Azure for the client) | `src/lib/agents.ts`, `src/lib/llm/*`, `src/lib/azure/*`, `src/components/chat-panel.tsx` |
 | RAG / AWS | `src/lib/rag.ts`, `src/lib/aws/*`, `src/lib/embeddings.ts`, `src/lib/ingest.ts` |
 | Frameworks / scoring | `src/lib/frameworks.ts` |
 | Workstream | `src/lib/workstream.ts`, `src/app/workstream` |
@@ -560,6 +560,6 @@ Suggested split:
 - Coverage is keyword overlap, not a QSA or CMS auditor
 - Federal Register falls back to demo items (including CMS-4208-F3) if the live API fails
 - Reports are internal memos only
-- Seed J&J SOPs are stand-ins, not real client documents
+- Seed SOPs are stand-ins, not real client documents
 
-Reasonable next steps: PDF ingest of 91 FR 17384, real J&J SOP ingest, Postgres or Bedrock KB as the only store, Azure cutover, auth, and plugging `/api/v1` into PolicyTech / Veeva.
+Reasonable next steps: PDF ingest of 91 FR 17384, real SOP ingest, Postgres or Bedrock KB as the only store, Azure cutover, auth, and plugging `/api/v1` into PolicyTech / Veeva.

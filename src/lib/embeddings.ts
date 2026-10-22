@@ -14,7 +14,7 @@ export function ragProvider(): RagProvider {
   return "keyword";
 }
 
-/** Titan if AWS RAG is on; else OpenAI API (this project) or Azure (J&J). */
+/** Titan if AWS RAG is on; else OpenAI API (this project) or Azure for the client. */
 export async function embedTexts(texts: string[]): Promise<number[][] | null> {
   if (texts.length === 0) return null;
   if (awsConfigured()) {

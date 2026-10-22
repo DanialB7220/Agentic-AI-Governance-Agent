@@ -19,7 +19,7 @@ function openai() {
   return client;
 }
 
-/** This repo: OpenAI API. J&J production: Azure OpenAI (same function names). */
+/** This repo: OpenAI API. Client production: Azure OpenAI (same function names). */
 export async function completeChat(opts: {
   system: string;
   user: string;

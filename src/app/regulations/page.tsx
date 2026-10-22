@@ -4,7 +4,19 @@ import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Upload } from "lucide-react";
-import type { RegulationFeedItem } from "@/lib/types";
+import {
+  DuplicateChoiceDialog,
+  SampleRegulationDialog,
+} from "@/components/regulation-dialogs";
+import { SAMPLE_REGULATIONS } from "@/lib/sample-regulations";
+import type { RegulationFeedItem, StoredDocument } from "@/lib/types";
+
+type Conflict = {
+  existingId: string;
+  existingTitle: string;
+  existingWhen: string;
+  file?: File;
+};
 
 export default function RegulationsPage() {
   const router = useRouter();
@@ -15,12 +27,21 @@ export default function RegulationsPage() {
   const [text, setText] = useState("");
   const [notice, setNotice] = useState("");
   const [savedReportId, setSavedReportId] = useState<string | null>(null);
+  const [library, setLibrary] = useState<StoredDocument[]>([]);
+  const [viewing, setViewing] = useState<{ title: string; text: string } | null>(
+    null,
+  );
+  const [conflict, setConflict] = useState<Conflict | null>(null);
 
   useEffect(() => {
     fetch("/api/regulations")
       .then((r) => r.json())
       .then((j) => setItems(j.items ?? []))
       .catch(() => setError("Could not load the regulation feed."));
+    fetch("/api/documents")
+      .then((r) => r.json())
+      .then((j) => setLibrary(j.documents ?? []))
+      .catch(() => setLibrary([]));
   }, []);
 
   async function ingestItem(item: RegulationFeedItem) {
@@ -55,21 +76,18 @@ export default function RegulationsPage() {
     }
   }
 
-  async function addSamples() {
-    setBusyId("samples");
-    setError("");
-    setNotice("");
-    setSavedReportId(null);
-    const res = await fetch("/api/regulations/samples", { method: "POST" });
-    const json = await res.json().catch(() => ({}));
-    setBusyId(null);
-    if (!res.ok) {
-      setError(json.error || "Could not add sample regulations.");
-      return;
-    }
-    const fresh = await fetch("/api/regulations").then((r) => r.json());
-    setItems(fresh.items ?? []);
-    setNotice(json.message || "Sample regulations saved.");
+  function rememberDuplicate(
+    json: { document?: StoredDocument; message?: string },
+    file?: File,
+  ) {
+    const doc = json.document;
+    setConflict({
+      existingId: doc?.id ?? "",
+      existingTitle: doc?.title ?? "that regulation",
+      existingWhen: doc?.createdAt?.slice(0, 10) ?? "",
+      file,
+    });
+    setNotice(json.message || "This regulation is already saved.");
   }
 
   async function markReviewed() {
@@ -94,35 +112,11 @@ export default function RegulationsPage() {
     router.push("/?analyze=1");
   }
 
-  async function onUpload(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError("");
-    setNotice("");
-    setSavedReportId(null);
-    setBusyId("paste");
-    const res = await fetch("/api/ingest", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: title || "Uploaded regulation",
-        kind: "regulation",
-        text,
-        source: "upload",
-      }),
-    });
-    const json = await res.json();
-    setBusyId(null);
-    if (!res.ok) {
-      setError(json.error || "Upload failed");
-      return;
-    }
-    setTitle("");
-    setText("");
-    if (json.duplicate) {
-      setNotice(json.message || "You already uploaded this regulation.");
-      setSavedReportId(json.report?.id ?? null);
-      return;
-    }
+  function savedUpload(json: {
+    document: StoredDocument;
+    report?: { id: string };
+    analyzeError?: string;
+  }) {
     setItems((prev) => [
       {
         id: json.document.id,
@@ -135,13 +129,55 @@ export default function RegulationsPage() {
         ingested: true,
         isNew: false,
       },
-      ...prev,
+      ...prev.filter((item) => item.id !== json.document.id),
     ]);
+    setLibrary((prev) => [
+      json.document,
+      ...prev.filter((doc) => doc.id !== json.document.id),
+    ]);
+    setTitle("");
+    setText("");
+    setConflict(null);
     if (json.report?.id) router.push(`/reports/${json.report.id}`);
     else if (json.analyzeError) setError(json.analyzeError);
   }
 
-  async function onFile(file: File) {
+  async function onUpload(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    await sendPaste();
+  }
+
+  async function sendPaste(action?: "overwrite" | "add") {
+    setError("");
+    setNotice("");
+    setSavedReportId(null);
+    setBusyId("paste");
+    const res = await fetch("/api/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title: title || "Uploaded regulation",
+        kind: "regulation",
+        text,
+        source: "upload",
+        duplicateAction: action,
+        id: action === "overwrite" ? conflict?.existingId : undefined,
+      }),
+    });
+    const json = await res.json();
+    setBusyId(null);
+    if (!res.ok) {
+      setError(json.error || "Upload failed");
+      return;
+    }
+    if (json.duplicate) {
+      rememberDuplicate(json);
+      return;
+    }
+    savedUpload(json);
+  }
+
+  async function onFile(file: File, action?: "overwrite" | "add") {
     setError("");
     setNotice("");
     setSavedReportId(null);
@@ -151,6 +187,10 @@ export default function RegulationsPage() {
       form.set("file", file);
       form.set("kind", "regulation");
       form.set("title", file.name);
+      if (action) form.set("duplicateAction", action);
+      if (action === "overwrite" && conflict?.existingId) {
+        form.set("id", conflict.existingId);
+      }
       const res = await fetch("/api/ingest", { method: "POST", body: form });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -158,26 +198,10 @@ export default function RegulationsPage() {
         return;
       }
       if (json.duplicate) {
-        setNotice(json.message || "You already uploaded this regulation.");
-        setSavedReportId(json.report?.id ?? null);
+        rememberDuplicate(json, file);
         return;
       }
-      setItems((prev) => [
-        {
-          id: json.document.id,
-          title: json.document.title,
-          abstract: "Uploaded and indexed.",
-          url: "",
-          publishedAt: new Date().toISOString().slice(0, 10),
-          agency: "Upload",
-          type: "Upload",
-          ingested: true,
-          isNew: false,
-        },
-        ...prev,
-      ]);
-      if (json.report?.id) router.push(`/reports/${json.report.id}`);
-      else if (json.analyzeError) setError(json.analyzeError);
+      savedUpload(json);
     } catch {
       setError("Upload failed.");
     } finally {
@@ -185,15 +209,24 @@ export default function RegulationsPage() {
     }
   }
 
+  function resolveConflict(action: "overwrite" | "add") {
+    const pending = conflict;
+    if (!pending) return;
+    if (pending.file) {
+      void onFile(pending.file, action);
+      return;
+    }
+    void sendPaste(action);
+  }
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Regulations</h1>
       <p className="mt-2 text-sm text-slate-400">
-        Scan the Federal Register, paste a rule, or add sample regulations
-        written as assumptions for a manufacturer like Johnson &amp; Johnson.
-        Indexing a real rule saves the full text and runs a “what to change”
-        report against current internal policies. Samples are saved for search;
-        use Analyze vs org when you want that report.
+        Sample regulations for a healthcare company are
+        already in the library. View one to read it. Paste or upload another
+        rule to add it. If that text is already saved, choose overwrite or add
+        it as a new regulation.
       </p>
 
       <form onSubmit={onUpload} className="glass mt-8 grid gap-3 rounded-2xl p-4">
@@ -228,14 +261,6 @@ export default function RegulationsPage() {
             Index text
             {busyId === "paste" ? "…" : ""}
           </button>
-          <button
-            type="button"
-            disabled={busyId !== null}
-            onClick={() => void addSamples()}
-            className="h-10 cursor-pointer rounded-xl border border-white/10 px-4 text-sm text-slate-200 hover:bg-white/5 disabled:opacity-40"
-          >
-            {busyId === "samples" ? "Adding samples…" : "Add sample regulations"}
-          </button>
           <label className="flex h-10 cursor-pointer items-center gap-2 rounded-xl border border-white/10 px-3 text-sm text-slate-300 hover:bg-white/5">
             <Upload className="h-4 w-4" aria-hidden />
             Upload file
@@ -267,6 +292,38 @@ export default function RegulationsPage() {
         </p>
       )}
       {error && <p className="mt-4 text-sm text-rose-300">{error}</p>}
+
+      <section className="mt-8">
+        <h2 className="text-sm font-medium text-white">Sample regulations</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Built in for a healthcare company. These are planning
+          assumptions, not official rules.
+        </p>
+        <ul className="mt-3 grid gap-3">
+          {SAMPLE_REGULATIONS.map((sample) => (
+            <li key={sample.id} className="glass rounded-2xl p-4">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">
+                Sample assumption · {sample.publishedAt}
+              </p>
+              <h3 className="mt-1 text-sm font-semibold text-white">{sample.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-slate-400">{sample.abstract}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  const saved = library.find((doc) => doc.id === sample.id);
+                  setViewing({
+                    title: saved?.title ?? sample.title,
+                    text: saved?.text ?? sample.text,
+                  });
+                }}
+                className="mt-3 h-9 cursor-pointer rounded-lg bg-amber-500 px-3 text-xs font-medium text-slate-950 hover:bg-amber-400"
+              >
+                View
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
 
       {items.some((item) => item.isNew) ? (
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-4 py-3">
@@ -330,6 +387,23 @@ export default function RegulationsPage() {
           </li>
         ))}
       </ul>
+      {viewing ? (
+        <SampleRegulationDialog
+          title={viewing.title}
+          text={viewing.text}
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
+      {conflict ? (
+        <DuplicateChoiceDialog
+          title={conflict.existingTitle}
+          when={conflict.existingWhen}
+          busy={busyId !== null}
+          onOverwrite={() => resolveConflict("overwrite")}
+          onAdd={() => resolveConflict("add")}
+          onClose={() => setConflict(null)}
+        />
+      ) : null}
     </div>
   );
 }

@@ -4,7 +4,7 @@ export default function IntegratePage() {
       <h1 className="text-2xl font-semibold tracking-tight">Integrate later</h1>
       <p className="mt-2 text-sm leading-6 text-slate-400">
         Same agents, RAG, and reports over HTTP. This repo chats with the public
-        OpenAI API; J&amp;J production should send the same requests after flipping
+        OpenAI API; production should send the same requests after flipping
         to Azure OpenAI. Set <code>AEGIS_API_KEY</code> and send it as{" "}
         <code>x-api-key</code>.
       </p>
@@ -26,7 +26,7 @@ export default function IntegratePage() {
           body={`{
   "mode": "report",
   "messages": [
-    { "role": "user", "content": "CMS-4208-F3 gap report for J&J" }
+    { "role": "user", "content": "CMS-4208-F3 gap report for our policies" }
   ]
 }`}
           note="NDJSON stream: status, delta, report, done"

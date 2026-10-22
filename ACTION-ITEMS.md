@@ -23,7 +23,7 @@ Same list in the app: **Tickets**.
 |---|---|
 | Chat (Scout / Auditor) | Explains a question; can draft a memo |
 | Regulations page | Pulls a live Federal Register list when you open it; you can index one item |
-| Organization | Fake J&J policies + you can paste more .txt/.md |
+| Organization | Stand-in policies + you can paste more .txt/.md |
 | Reports | Saves memos in a local JSON file |
 | AWS | Titan embeddings + optional Knowledge Base. Search indexes on ingest and first health/chat. Policies and rules are retrieved separately. |
 | OpenAI | Chat for **this** project. Also embeddings if AWS is off. Azure later for a client |

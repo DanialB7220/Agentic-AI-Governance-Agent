@@ -17,7 +17,7 @@ const ibmPlex = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "Aegis — Governance copilot",
   description:
-    "Detect CMS and other regulations, compare them to Johnson & Johnson’s current policies, and draft internal readiness memos. Not a CMS filing.",
+    "Detect CMS and other regulations, compare them to your current policies, and draft internal readiness memos. Not a CMS filing.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -62,7 +62,7 @@ export default function OrgPage() {
       <h1 className="text-2xl font-semibold tracking-tight">Organization</h1>
       <p className="mt-2 text-sm text-slate-400">
         This is the snapshot Scout and Auditor compare CMS-4208-F3 against.
-        Replace the demo stand-in SOPs with J&amp;J’s real (redacted) policies.
+        Replace the demo stand-in SOPs with your real (redacted) policies.
       </p>
 
       <form onSubmit={onSubmit} className="mt-8 grid gap-4">

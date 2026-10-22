@@ -18,18 +18,26 @@ const JsonBody = z.object({
   publishedAt: z.string().optional(),
   id: z.string().optional(),
   analyze: z.boolean().optional(),
+  duplicateAction: z.enum(["overwrite", "add"]).optional(),
 });
 
 async function saveOrReject(body: z.infer<typeof JsonBody>) {
-  const { analyze, ...docInput } = body;
-  if (docInput.kind === "regulation") {
+  const { analyze, duplicateAction, ...docInput } = body;
+  if (docInput.kind === "regulation" && duplicateAction !== "add") {
     const existing = await findSavedRegulation({
       text: docInput.text,
       id: docInput.id,
     });
+    if (existing && duplicateAction === "overwrite") {
+      const doc = await ingestDocument({ ...docInput, id: existing.id });
+      return maybeAnalyze(doc, analyze !== false);
+    }
     if (existing) return alreadySavedPayload(existing);
   }
-  const doc = await ingestDocument(docInput);
+  const doc = await ingestDocument({
+    ...docInput,
+    id: duplicateAction === "add" ? undefined : docInput.id,
+  });
   return maybeAnalyze(doc, analyze !== false);
 }
 
@@ -68,12 +76,16 @@ export async function POST(req: Request) {
       if (file instanceof File) {
         text = (await textFromUpload(file)) || text;
       }
+      const duplicateAction = String(form.get("duplicateAction") || "");
+      const id = String(form.get("id") || "");
       const parsed = JsonBody.safeParse({
         title,
         kind,
         text,
         framework: framework || undefined,
         source: "upload",
+        duplicateAction: duplicateAction || undefined,
+        id: id || undefined,
       });
       if (!parsed.success) {
         return jsonError(

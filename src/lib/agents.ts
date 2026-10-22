@@ -16,7 +16,7 @@ import type {
 } from "./types";
 
 const AUDIT_RE =
-  /\b(report|audit|gap|implement|roadmap|readiness|soc\s*2|pci|gdpr|nist|keep up|what to do|cms|medicare|part d|manufacturer discount|j&j|jnj)\b/i;
+  /\b(report|audit|gap|implement|roadmap|readiness|soc\s*2|pci|gdpr|nist|keep up|what to do|cms|medicare|part d|manufacturer discount)\b/i;
 
 export async function* runCopilot(input: {
   messages: { role: "user" | "assistant"; content: string }[];
@@ -224,7 +224,7 @@ async function runAuditor(input: {
 
   const narrative = await completeChat({
     system:
-      "You are Auditor. Rewrite the readiness memo in clear English. Keep every finding and every policy change. Do not invent evidence. Label this as an internal memo, not a CMS filing, SOC attestation, or legal opinion. Use markdown. For Johnson & Johnson, treat the org as a manufacturer / plan partner, not an MA organization, unless the org notes say otherwise.",
+      "You are Auditor. Rewrite the readiness memo in clear English. Keep every finding and every policy change. Do not invent evidence. Label this as an internal memo, not a CMS filing, SOC attestation, or legal opinion. Use markdown. Treat the org as a healthcare company and plan partner, not an MA organization, unless the org notes say otherwise.",
     user: `${structured}\n\nScout notes (use for context, do not treat as org evidence):\n${input.scoutNotes}`,
     maxTokens: 1800,
   });

@@ -90,7 +90,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {health?.openai
               ? "OpenAI API (this project)"
               : health?.azure
-                ? "Azure OpenAI (J&J)"
+                ? "Azure OpenAI"
                 : "Template fallback"}
           </p>
           <p className="mt-3 mb-1 font-medium text-slate-200">Retrieval</p>

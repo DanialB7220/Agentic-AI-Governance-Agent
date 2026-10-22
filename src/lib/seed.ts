@@ -1,8 +1,8 @@
 import type { OrgProfile, StoredDocument } from "./types";
 
 export const seedOrg: OrgProfile = {
-  name: "Johnson & Johnson",
-  industry: "Innovative Medicine / MedTech (Part D manufacturer)",
+  name: "Healthcare Manufacturer",
+  industry: "Healthcare company (Part D)",
   size: "Enterprise",
   jurisdictions: ["United States", "EU", "global affiliates"],
   frameworks: ["cms-ma-pd", "soc2"],
@@ -13,7 +13,7 @@ export const seedOrg: OrgProfile = {
   ],
   scanKeywords: ["Medicare", "Part D"],
   notes:
-    "Client engagement: map CMS-4208-F3 / CMS-4212-F (CY2027 MA/Part D final rule, 91 FR 17384) onto existing J&J manufacturer, patient-support, medical-legal-regulatory, and market-access workflows. J&J is not an MA organization; primary exposure is Manufacturer Discount Program, selected-drug / MFP interactions, insulin and vaccine cost-sharing rules, TrOOP, and any MA/Part D marketing or plan-partner programs. Seed policies below are demo stand-ins, not real J&J SOPs.",
+    "Demo tenant: map CMS-4208-F3 / CMS-4212-F (CY2027 MA/Part D final rule, 91 FR 17384) onto a healthcare company's patient-support, medical-legal-regulatory, and market-access workflows. The company is not an MA organization. Primary exposure is the Manufacturer Discount Program, selected-drug / MFP interactions, insulin and vaccine cost-sharing rules, TrOOP, and any MA/Part D marketing or plan-partner programs. Seed policies below are stand-ins, not a real company's SOPs.",
   updatedAt: new Date().toISOString(),
 };
 
@@ -37,7 +37,7 @@ Effective date: June 1, 2026.
 Applicability: coverage beginning January 1, 2027.
 Marketing and communications policies: applicable for all contract year 2027 marketing and communications, beginning October 1, 2026.
 
-Key provisions for a manufacturer such as Johnson & Johnson:
+Key provisions for a healthcare company:
 
 1. Part D redesign (IRA § 11201) is codified: deductible, initial coverage, catastrophic. Coverage gap eliminated. Annual OOP threshold (e.g. $2,100 for CY2026, inflation-adjusted). Enrollee pays 25% coinsurance in initial coverage; $0 cost sharing in catastrophic.
 
@@ -60,13 +60,13 @@ Key provisions for a manufacturer such as Johnson & Johnson:
 This extract is a planning aid from a U.S. government work. It is not legal advice and is not a substitute for the full PDF.`,
   },
   {
-    id: "doc_jnj_mdp_sop",
+    id: "doc_demo_mdp_sop",
     title: "Manufacturer Discount / Coverage Gap — finance SOP (stand-in)",
     kind: "policy",
     source: "seed",
     framework: "cms-ma-pd",
     createdAt: "2025-06-01T00:00:00.000Z",
-    text: `J&J Innovative Medicine — U.S. Market Access finance SOP (demo stand-in, not a real SOP)
+    text: `U.S. Market Access finance SOP (demo stand-in, not a real SOP)
 
 Purpose: pay Coverage Gap Discount Program invoices from Part D sponsors via the historical CGDP agreement workflow in SAP.
 
@@ -80,7 +80,7 @@ Purpose: pay Coverage Gap Discount Program invoices from Part D sponsors via the
 Known gap: this SOP has not been rewritten for 42 CFR 423 subpart AA or the three-phase Part D benefit.`,
   },
   {
-    id: "doc_jnj_mlr",
+    id: "doc_demo_mlr",
     title: "U.S. medical-legal-regulatory review SOP (stand-in)",
     kind: "policy",
     source: "seed",
@@ -95,7 +95,7 @@ Known gap: this SOP has not been rewritten for 42 CFR 423 subpart AA or the thre
 - SSBCI eligibility language is not in the MLR taxonomy.`,
   },
   {
-    id: "doc_jnj_pap",
+    id: "doc_demo_pap",
     title: "Patient assistance and copay operations (stand-in)",
     kind: "policy",
     source: "seed",
@@ -112,13 +112,13 @@ Known gap: this SOP has not been rewritten for 42 CFR 423 subpart AA or the thre
 Access control: hub vendors are on SSO with MFA. Quarterly access reviews exist. Least privilege is documented.`,
   },
   {
-    id: "doc_jnj_access",
+    id: "doc_demo_access",
     title: "Enterprise access control (stand-in)",
     kind: "policy",
     source: "seed",
     framework: "soc2",
     createdAt: "2026-01-12T00:00:00.000Z",
-    text: `J&J enterprise access control (demo stand-in)
+    text: `Enterprise access control (demo stand-in)
 
 - Workforce access via SSO and MFA.
 - Joiner-mover-leaver through identity governance. Quarterly access reviews for finance and hub systems that touch PDE and manufacturer discount files.

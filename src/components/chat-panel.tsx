@@ -2,20 +2,22 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, FileUp, LoaderCircle, Sparkles } from "lucide-react";
+import { ArrowUp, FileUp, LoaderCircle, Plus, Sparkles, Trash2 } from "lucide-react";
+import { DuplicateChoiceDialog } from "./regulation-dialogs";
 import { Markdown } from "./markdown";
+import { scrubJson } from "@/lib/scrub-names";
 import type { ChatEvent, DocumentKind, Report, StoredDocument } from "@/lib/types";
 
 const STARTERS = [
   {
-    title: "CMS-4208-F3 vs J&J",
+    title: "CMS-4208-F3 vs our policies",
     prompt:
-      "Analyze CMS-4208-F3 / CMS-4212-F (CY2027 MA and Part D final rule) against Johnson & Johnson’s current policies. Gap report and 30/60/90 plan. Focus Manufacturer Discount Program, TrOOP, insulin/vaccines, and marketing dates.",
+      "Analyze CMS-4208-F3 / CMS-4212-F (CY2027 MA and Part D final rule) against our current policies. Gap report and 30/60/90 plan. Focus Manufacturer Discount Program, TrOOP, insulin/vaccines, and marketing dates.",
   },
   {
     title: "Manufacturer Discount Program",
     prompt:
-      "What does J&J still have to change to leave Coverage Gap Discount Program operations and run 42 CFR 423 subpart AA Manufacturer Discount Program, including selected drugs during MFP periods?",
+      "What do we still have to change to leave Coverage Gap Discount Program operations and run 42 CFR 423 subpart AA Manufacturer Discount Program, including selected drugs during MFP periods?",
   },
   {
     title: "Oct 1, 2026 marketing gate",
@@ -25,7 +27,7 @@ const STARTERS = [
   {
     title: "Keep us current",
     prompt:
-      "Given J&J’s org snapshot and the ingested CMS final rule, what should market access, hub, and MLR do this quarter to stay compliant? Not a full TLC program.",
+      "Given our org snapshot and the ingested CMS final rule, what should market access, hub, and MLR do this quarter to stay compliant? Not a full TLC program.",
   },
 ];
 
@@ -37,6 +39,31 @@ type Message = {
   citations?: { title: string; kind: DocumentKind }[];
   report?: Report;
 };
+
+type ChatThread = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  messages: Message[];
+};
+
+const CHAT_STORE_KEY = "aegis:chats";
+
+function threadTitle(messages: Message[]) {
+  const first = messages.find((message) => message.role === "user")?.content ?? "New chat";
+  const clean = first.replace(/\s+/g, " ").trim();
+  return clean.length > 42 ? `${clean.slice(0, 42)}…` : clean || "New chat";
+}
+
+function loadThreads(): ChatThread[] {
+  try {
+    const raw = localStorage.getItem(CHAT_STORE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as ChatThread[]) : [];
+    return Array.isArray(parsed) ? scrubJson(parsed) : [];
+  } catch {
+    return [];
+  }
+}
 
 type IngestReply = {
   duplicate?: boolean;
@@ -74,9 +101,18 @@ export function ChatPanel({
   preset?: string;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
+  const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [historyReady, setHistoryReady] = useState(false);
   const [input, setInput] = useState(preset ?? "");
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState<StoredDocument[]>([]);
+  const [uploadChoice, setUploadChoice] = useState<{
+    file: File;
+    title: string;
+    when: string;
+    existingId: string;
+  } | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
 
   function loadSaved() {
@@ -94,7 +130,48 @@ export function ChatPanel({
 
   useEffect(() => {
     loadSaved();
+    setThreads(loadThreads());
+    setHistoryReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!historyReady) return;
+    localStorage.setItem(CHAT_STORE_KEY, JSON.stringify(threads));
+  }, [threads, historyReady]);
+
+  useEffect(() => {
+    if (!historyReady || !activeId || messages.length === 0) return;
+    const stored = messages.map(({ status: _status, ...message }) => message);
+    const next: ChatThread = {
+      id: activeId,
+      title: threadTitle(stored),
+      updatedAt: new Date().toISOString(),
+      messages: stored,
+    };
+    setThreads((prev) => [next, ...prev.filter((thread) => thread.id !== activeId)].slice(0, 40));
+  }, [messages, activeId, historyReady]);
+
+  function openThread(thread: ChatThread) {
+    if (busy) return;
+    setActiveId(thread.id);
+    setMessages(thread.messages);
+    setInput("");
+  }
+
+  function newChat() {
+    if (busy) return;
+    setActiveId(null);
+    setMessages([]);
+    setInput("");
+  }
+
+  function removeThread(id: string) {
+    setThreads((prev) => prev.filter((thread) => thread.id !== id));
+    if (id === activeId) {
+      setActiveId(null);
+      setMessages([]);
+    }
+  }
 
   useEffect(() => {
     const presetPrompt = sessionStorage.getItem("aegis:preset");
@@ -108,6 +185,7 @@ export function ChatPanel({
   async function send(text: string, mode?: "chat" | "report") {
     const content = text.trim();
     if (!content || busy) return;
+    if (!activeId) setActiveId(`chat_${Date.now()}`);
     const user: Message = { id: `u_${Date.now()}`, role: "user", content };
     const assistant: Message = {
       id: `a_${Date.now()}`,
@@ -168,8 +246,9 @@ export function ChatPanel({
     }
   }
 
-  async function uploadRegulation(file: File) {
+  async function uploadRegulation(file: File, action?: "overwrite" | "add") {
     if (busy) return;
+    if (!activeId) setActiveId(`chat_${Date.now()}`);
     const user: Message = {
       id: `u_${Date.now()}`,
       role: "user",
@@ -192,6 +271,10 @@ export function ChatPanel({
         "title",
         file.name.replace(/\.(pdf|txt|md|text)$/i, "") || file.name,
       );
+      if (action) form.set("duplicateAction", action);
+      if (action === "overwrite" && uploadChoice?.existingId) {
+        form.set("id", uploadChoice.existingId);
+      }
       const res = await fetch("/api/ingest", { method: "POST", body: form });
       const json = (await res.json().catch(() => ({}))) as IngestReply;
       if (!res.ok) {
@@ -204,6 +287,16 @@ export function ChatPanel({
           },
         ]);
         return;
+      }
+      if (json.duplicate && json.document) {
+        setUploadChoice({
+          file,
+          title: json.document.title,
+          when: json.document.createdAt.slice(0, 10),
+          existingId: json.document.id,
+        });
+      } else {
+        setUploadChoice(null);
       }
       setMessages([
         ...history,
@@ -230,7 +323,26 @@ export function ChatPanel({
   }
 
   return (
-    <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col px-4 py-6">
+    <div className="flex min-h-full">
+      <ChatHistory
+        threads={threads}
+        activeId={activeId}
+        busy={busy}
+        onNew={newChat}
+        onOpen={openThread}
+        onDelete={removeThread}
+      />
+      <div className="flex min-w-0 flex-1 flex-col">
+      <ChatHistory
+        mobile
+        threads={threads}
+        activeId={activeId}
+        busy={busy}
+        onNew={newChat}
+        onOpen={openThread}
+        onDelete={removeThread}
+      />
+      <div className="mx-auto flex min-h-full w-full max-w-3xl flex-1 flex-col px-4 py-6">
       {messages.length === 0 ? (
         <div className="flex flex-1 flex-col justify-center pb-8">
           <p className="mb-2 text-xs font-medium uppercase tracking-[0.18em] text-amber-400">
@@ -370,6 +482,16 @@ export function ChatPanel({
           placeholder="Ask about a rule, or upload one with the file button…"
           className="min-h-11 flex-1 resize-none bg-transparent px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:outline-none"
         />
+        {uploadChoice ? (
+          <DuplicateChoiceDialog
+            title={uploadChoice.title}
+            when={uploadChoice.when}
+            busy={busy}
+            onOverwrite={() => void uploadRegulation(uploadChoice.file, "overwrite")}
+            onAdd={() => void uploadRegulation(uploadChoice.file, "add")}
+            onClose={() => setUploadChoice(null)}
+          />
+        ) : null}
         <button
           type="submit"
           disabled={busy || !input.trim()}
@@ -379,6 +501,98 @@ export function ChatPanel({
           <ArrowUp className="h-4 w-4" />
         </button>
       </form>
+      </div>
+      </div>
     </div>
+  );
+}
+
+function ChatHistory({
+  threads,
+  activeId,
+  busy,
+  mobile,
+  onNew,
+  onOpen,
+  onDelete,
+}: {
+  threads: ChatThread[];
+  activeId: string | null;
+  busy: boolean;
+  mobile?: boolean;
+  onNew: () => void;
+  onOpen: (thread: ChatThread) => void;
+  onDelete: (id: string) => void;
+}) {
+  const list = threads.length === 0 ? (
+    <p className={mobile ? "px-1 text-xs text-slate-500" : "px-2 text-xs text-slate-500"}>
+      No chats yet
+    </p>
+  ) : (
+    threads.map((thread) => {
+      const active = thread.id === activeId;
+      return (
+        <div key={thread.id} className={mobile ? "flex shrink-0" : "group flex"}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onOpen(thread)}
+            className={`cursor-pointer truncate text-left text-sm disabled:opacity-40 ${
+              mobile
+                ? `max-w-40 rounded-full px-3 py-1.5 ${active ? "bg-white/15 text-white" : "text-slate-300 hover:bg-white/8"}`
+                : `min-w-0 flex-1 rounded-lg px-2 py-2 ${active ? "bg-white/10 text-white" : "text-slate-300 hover:bg-white/5"}`
+            }`}
+          >
+            {thread.title}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            aria-label={`Delete ${thread.title}`}
+            onClick={() => onDelete(thread.id)}
+            className={`cursor-pointer text-slate-500 hover:text-rose-300 disabled:opacity-40 ${
+              mobile ? "px-1" : "rounded-lg px-1 opacity-0 group-hover:opacity-100"
+            }`}
+          >
+            <Trash2 className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        </div>
+      );
+    })
+  );
+
+  if (mobile) {
+    return (
+      <div className="flex items-center gap-2 overflow-x-auto border-b border-white/10 px-3 py-2 md:hidden">
+        <button
+          type="button"
+          disabled={busy}
+          onClick={onNew}
+          className="flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-full bg-amber-500 px-3 text-xs font-medium text-slate-950 hover:bg-amber-400 disabled:opacity-40"
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden />
+          New chat
+        </button>
+        {list}
+      </div>
+    );
+  }
+
+  return (
+    <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r border-white/10 bg-slate-950/50 p-3 md:flex">
+      <button
+        type="button"
+        disabled={busy}
+        onClick={onNew}
+        className="mb-4 flex h-10 cursor-pointer items-center justify-center gap-2 rounded-xl bg-amber-500 text-sm font-medium text-slate-950 hover:bg-amber-400 disabled:opacity-40"
+      >
+        <Plus className="h-4 w-4" aria-hidden />
+        New chat
+      </button>
+      <p className="mb-2 px-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">
+        Chats
+      </p>
+      <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">{list}</div>
+    </aside>
   );
 }
