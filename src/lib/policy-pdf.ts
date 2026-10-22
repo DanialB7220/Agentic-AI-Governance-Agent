@@ -135,7 +135,7 @@ export async function policySuggestionsPdf(report: Report) {
 
   const pages = pdf.getPages();
   pages.forEach((sheet: PDFPage, index) => {
-    sheet.drawText(`Aegis  ·  ${index + 1} / ${pages.length}`, {
+    sheet.drawText(`Governance Agent  ·  ${index + 1} / ${pages.length}`, {
       x: MARGIN,
       y: 28,
       size: 9,

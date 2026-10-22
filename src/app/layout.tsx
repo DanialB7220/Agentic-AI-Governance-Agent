@@ -15,7 +15,7 @@ const ibmPlex = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Aegis — Governance copilot",
+  title: "Governance Agent",
   description:
     "Detect CMS and other regulations, compare them to your current policies, and draft internal readiness memos. Not a CMS filing.",
 };

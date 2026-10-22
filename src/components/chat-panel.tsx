@@ -352,7 +352,7 @@ export function ChatPanel({
             See how a new rule lands on your org, then get a plan.
           </h1>
           <p className="mt-3 max-w-xl text-sm leading-6 text-slate-400">
-            Drop your own regulation here (PDF, txt, or md). Aegis saves it,
+            Drop your own regulation here (PDF, txt, or md). Governance Agent saves it,
             compares it to the internal policies, and tells you if you already
             uploaded that same rule.
           </p>
@@ -394,7 +394,7 @@ export function ChatPanel({
           {messages.map((m) => (
             <article key={m.id} className={m.role === "user" ? "ml-8" : "mr-4"}>
               <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-slate-500">
-                {m.role === "user" ? "You" : "Aegis"}
+                {m.role === "user" ? "You" : "Governance Agent"}
               </p>
               <div
                 className={`rounded-2xl px-4 py-3 ${
@@ -464,7 +464,7 @@ export function ChatPanel({
           />
         </label>
         <label htmlFor="copilot-input" className="sr-only">
-          Message Aegis
+          Message Governance Agent
         </label>
         <textarea
           id="copilot-input"

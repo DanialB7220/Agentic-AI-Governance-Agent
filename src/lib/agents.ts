@@ -557,7 +557,7 @@ function renderReport(input: {
     "",
     "## How to keep up",
     "- Watch the Regulations feed weekly (FTC, CFPB, SEC, HHS).",
-    "- Ingest each new rule into Aegis and re-run this memo.",
+    "- Ingest each new rule into Governance Agent and re-run this memo.",
     "- Treat missing controls as tickets, not a once-a-year project.",
   );
   return lines.join("\n");

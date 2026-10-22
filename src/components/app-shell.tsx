@@ -55,7 +55,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <Shield className="h-5 w-5" aria-hidden />
           </span>
           <span>
-            <span className="block text-sm font-semibold tracking-tight">Aegis</span>
+            <span className="block text-sm font-semibold leading-tight tracking-tight">Governance Agent</span>
             <span className="block text-xs text-slate-400">Governance copilot</span>
           </span>
         </Link>
@@ -117,7 +117,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <header className="flex items-center gap-3 border-b border-white/10 px-4 py-3 md:hidden">
           <Shield className="h-5 w-5 text-amber-400" aria-hidden />
-          <span className="font-semibold">Aegis</span>
+          <span className="font-semibold">Governance Agent</span>
         </header>
         <nav
           className="flex gap-1 overflow-x-auto border-b border-white/10 px-3 py-2 md:hidden"
