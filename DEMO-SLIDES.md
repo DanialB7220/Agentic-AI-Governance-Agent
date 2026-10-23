@@ -118,23 +118,9 @@ Say this once up front: Aegis is an internal governance copilot. It reads a new 
 
 ---
 
-## Slide 8 — Integrate
+## Slide 8 — Close
 
-**Show:** the three calls: ingest, chat, reports.
-
-**How to use.** Later, another system sends the same requests with `x-api-key`. This repo uses the public OpenAI API. A the client deployment would point the same calls at Azure OpenAI.
-
-**What it solves.** A demo that cannot be wired into the tools people already use.
-
-**What it brings.** A stable HTTP shape for ingest, ask, and fetch memos.
-
-**Business value.** The pilot can stay a website now and sit behind an internal portal later without a new product.
-
----
-
-## Slide 9 — Close
-
-**Say:** Aegis watches the rules that hit a Part D manufacturer, checks them against the policies you already have, and writes the change list with an owner and a date.
+**Say:** Governance Agent watches the rules that hit a healthcare company, checks them against the policies you already have, and writes the change list with an owner and a date.
 
 **Do not claim:**
 - These sample rules are official CMS or FDA text.

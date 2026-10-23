@@ -9,7 +9,6 @@ import {
   FileBarChart,
   Gauge,
   MessageSquare,
-  Plug,
   ScrollText,
   Shield,
 } from "lucide-react";
@@ -21,19 +20,13 @@ const NAV = [
   { href: "/reports", label: "Reports", icon: FileBarChart },
   { href: "/risk", label: "Risk", icon: Gauge },
   { href: "/records", label: "Records", icon: ScrollText },
-  { href: "/integrate", label: "Integrate", icon: Plug },
 ];
 
 type Health = {
-  openai: boolean;
-  azure: boolean;
-  aws: boolean;
   knowledgeBase: boolean;
   rag?: string;
   documents: number;
   embeddings?: number;
-  pendingEmbeddings?: number;
-  chat?: string;
 };
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -85,15 +78,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </nav>
 
         <div className="rounded-xl border border-white/10 bg-white/4 px-3 py-3 text-xs text-slate-400">
-          <p className="mb-1 font-medium text-slate-200">Chat</p>
-          <p>
-            {health?.openai
-              ? "OpenAI API (this project)"
-              : health?.azure
-                ? "Azure OpenAI"
-                : "Template fallback"}
-          </p>
-          <p className="mt-3 mb-1 font-medium text-slate-200">Retrieval</p>
+          <p className="mb-1 font-medium text-slate-200">Retrieval</p>
           <p>
             {health?.knowledgeBase
               ? "AWS Bedrock Knowledge Base"
