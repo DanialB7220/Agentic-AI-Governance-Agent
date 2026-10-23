@@ -1,7 +1,9 @@
+import { listUserIds } from "./auth";
 import { fetchRegulationFeed } from "./regulations";
+import { bindUser } from "./session";
 import { getScan, logActivity, saveScan } from "./store";
 
-export async function runRegulationScan() {
+async function scanSignedInUser() {
   const previous = await getScan();
   const items = await fetchRegulationFeed();
   const fresh = items.filter((item) => item.isNew);
@@ -29,13 +31,31 @@ export async function runRegulationScan() {
   };
 }
 
+export async function runRegulationScan() {
+  const ids = await listUserIds();
+  const results = [];
+  for (const userId of ids) {
+    try {
+      results.push(await bindUser(userId, scanSignedInUser));
+    } catch (err) {
+      console.error("Regulation scan failed", err instanceof Error ? err.name : "error");
+    }
+  }
+  return {
+    users: ids.length,
+    scanned: results.reduce((sum, result) => sum + result.scanned, 0),
+    newCount: results.reduce((sum, result) => sum + result.newCount, 0),
+    lastScanAt: results.at(-1)?.lastScanAt ?? new Date().toISOString(),
+  };
+}
+
 export function startRegulationScan() {
   const g = globalThis as { aegisScan?: boolean };
   if (g.aegisScan) return;
   g.aegisScan = true;
   const run = () => {
     void runRegulationScan().catch((err) => {
-      console.error("Regulation scan failed", err);
+      console.error("Regulation scan failed", err instanceof Error ? err.name : "error");
     });
   };
   const starter = setTimeout(run, 4000);

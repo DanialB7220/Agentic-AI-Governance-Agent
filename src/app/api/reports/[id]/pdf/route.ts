@@ -1,12 +1,13 @@
 import { policySuggestionsPdf } from "@/lib/policy-pdf";
+import { authed } from "@/lib/session";
 import { getReport } from "@/lib/store";
 
 export const runtime = "nodejs";
 
-export async function GET(
+export const GET = authed(async (
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
-) {
+) => {
   const { id } = await ctx.params;
   const report = await getReport(id);
   if (!report) return Response.json({ error: "Not found" }, { status: 404 });
@@ -19,4 +20,4 @@ export async function GET(
       "Cache-Control": "no-store",
     },
   });
-}
+});

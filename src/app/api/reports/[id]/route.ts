@@ -1,18 +1,19 @@
 import { z } from "zod";
 import { jsonError } from "@/lib/http";
+import { authed } from "@/lib/session";
 import { getReport, updateReport } from "@/lib/store";
 
 export const runtime = "nodejs";
 
-export async function GET(
+export const GET = authed(async (
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
-) {
+) => {
   const { id } = await ctx.params;
   const report = await getReport(id);
   if (!report) return Response.json({ error: "Not found" }, { status: 404 });
   return Response.json({ report });
-}
+});
 
 const Patch = z.object({
   signedOffBy: z.string().min(1).max(120).optional(),
@@ -26,10 +27,10 @@ const Patch = z.object({
     .optional(),
 });
 
-export async function PATCH(
+export const PATCH = authed(async (
   req: Request,
   ctx: { params: Promise<{ id: string }> },
-) {
+) => {
   const { id } = await ctx.params;
   const parsed = Patch.safeParse(await req.json());
   if (!parsed.success) return jsonError("Invalid report update.");
@@ -63,4 +64,4 @@ export async function PATCH(
   );
   if (!report) return jsonError("Not found", 404);
   return Response.json({ report });
-}
+});

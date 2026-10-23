@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { runCopilot } from "@/lib/agents";
+import { authed } from "@/lib/session";
 
 export const runtime = "nodejs";
 
@@ -16,7 +17,7 @@ const Body = z.object({
   mode: z.enum(["chat", "analyze", "report"]).optional(),
 });
 
-export async function POST(req: Request) {
+export const POST = authed(async (req) => {
   const parsed = Body.safeParse(await req.json());
   if (!parsed.success) {
     return Response.json({ error: "Invalid chat payload." }, { status: 400 });
@@ -49,4 +50,4 @@ export async function POST(req: Request) {
       "Cache-Control": "no-cache",
     },
   });
-}
+});

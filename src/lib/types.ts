@@ -124,7 +124,7 @@ export type Report = {
 export type ActivityEvent = {
   id: string;
   at: string;
-  action: "upload" | "scan" | "report" | "sign-off" | "change" | "org";
+  action: "upload" | "scan" | "report" | "sign-off" | "change" | "org" | "account";
   detail: string;
   documentId?: string;
   reportId?: string;
@@ -147,6 +147,19 @@ export type ChatEvent =
   | { type: "citations"; citations: { title: string; kind: DocumentKind }[] }
   | { type: "error"; message: string }
   | { type: "done" };
+
+export type StoredChat = {
+  id: string;
+  title: string;
+  updatedAt: string;
+  messages: {
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    citations?: { title: string; kind: DocumentKind }[];
+    report?: Report;
+  }[];
+};
 
 export type RegulationFeedItem = {
   id: string;

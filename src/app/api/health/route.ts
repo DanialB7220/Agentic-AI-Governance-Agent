@@ -1,3 +1,4 @@
+import { authed } from "@/lib/session";
 import { awsConfigured, knowledgeBaseId } from "@/lib/aws/config";
 import { azureConfigured } from "@/lib/azure/config";
 import { openaiConfigured } from "@/lib/llm/config";
@@ -7,7 +8,7 @@ import { listChunks, listDocuments, listReports } from "@/lib/store";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export const GET = authed(async () => {
   await ensureIndexed().catch((err) => {
     console.error("RAG index on health", err);
   });
@@ -34,4 +35,4 @@ export async function GET() {
     embeddings: embedded,
     pendingEmbeddings: chunks.length - embedded,
   });
-}
+});

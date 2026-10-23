@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { jsonError } from "@/lib/http";
+import { authed } from "@/lib/session";
 import { analyzeRegulationDocument } from "@/lib/agents";
 import { alreadySavedPayload, findSavedRegulation } from "@/lib/duplicates";
 import { textFromUpload } from "@/lib/extract-upload";
@@ -60,7 +61,7 @@ async function maybeAnalyze(
   }
 }
 
-export async function POST(req: Request) {
+export const POST = authed(async (req) => {
   try {
     const contentType = req.headers.get("content-type") || "";
     if (contentType.includes("multipart/form-data")) {
@@ -99,6 +100,7 @@ export async function POST(req: Request) {
     if (!parsed.success) return jsonError("Invalid ingest payload.");
     return Response.json(await saveOrReject(parsed.data));
   } catch (err) {
+    if (err instanceof Error && err.name === "AuthError") throw err;
     return jsonError(err instanceof Error ? err.message : "Ingest failed.", 500);
   }
-}
+});

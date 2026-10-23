@@ -1,10 +1,9 @@
-import { mkdir, readFile } from "node:fs/promises";
-import path from "node:path";
 import { countRecords, readKind, readOne, replaceAll } from "./db";
 import { riskForStatus } from "./frameworks";
 import { SAMPLE_REGULATIONS } from "./sample-regulations";
 import { mentionsClient, scrubJson } from "./scrub-names";
 import { seedDocuments, seedOrg } from "./seed";
+import { requireUserId } from "./session";
 import { createId } from "./ids";
 import {
   SCAN_AGENCIES,
@@ -14,25 +13,9 @@ import {
   type PolicyChange,
   type Report,
   type ScanState,
+  type StoredChat,
   type StoredDocument,
 } from "./types";
-
-const DIR = path.join(process.cwd(), "data", "runtime");
-
-const LEGACY_DEMO_IDS = new Set([
-  "doc_access_policy",
-  "doc_encryption",
-  "doc_vendor",
-  "doc_incident",
-  "doc_new_pci",
-]);
-
-function isKeepDocument(doc: StoredDocument) {
-  if (LEGACY_DEMO_IDS.has(doc.id) || doc.id.startsWith("fr_demo_")) return false;
-  if (seedDocuments.some((s) => s.id === doc.id)) return true;
-  if (doc.id.startsWith("sample_")) return true;
-  return doc.source === "upload" || doc.source === "federal-register";
-}
 
 type StoreShape = {
   org: OrgProfile;
@@ -42,6 +25,7 @@ type StoreShape = {
   seenRegulationIds: string[];
   activity: ActivityEvent[];
   scan: ScanState;
+  chats: StoredChat[];
 };
 
 const EMPTY_SCAN: ScanState = { lastScanAt: null, newIds: [] };
@@ -132,48 +116,43 @@ function remember(
   ].slice(0, 200);
 }
 
-let memory: StoreShape | null = null;
-let chain: Promise<unknown> = Promise.resolve();
-let lockDepth = 0;
+const memories = new Map<string, StoreShape>();
+const chains = new Map<string, Promise<unknown>>();
+const depths = new Map<string, number>();
 
-function withLock<T>(fn: () => Promise<T>): Promise<T> {
-  if (lockDepth > 0) return fn();
-  const run = chain.then(
+function withLock<T>(userId: string, fn: () => Promise<T>): Promise<T> {
+  if ((depths.get(userId) ?? 0) > 0) return fn();
+  const prev = chains.get(userId) ?? Promise.resolve();
+  const run = prev.then(
     async () => {
-      lockDepth += 1;
+      depths.set(userId, (depths.get(userId) ?? 0) + 1);
       try {
         return await fn();
       } finally {
-        lockDepth -= 1;
+        depths.set(userId, Math.max(0, (depths.get(userId) ?? 1) - 1));
       }
     },
     async () => {
-      lockDepth += 1;
+      depths.set(userId, (depths.get(userId) ?? 0) + 1);
       try {
         return await fn();
       } finally {
-        lockDepth -= 1;
+        depths.set(userId, Math.max(0, (depths.get(userId) ?? 1) - 1));
       }
     },
   );
-  chain = run.then(
-    () => undefined,
-    () => undefined,
+  chains.set(
+    userId,
+    run.then(
+      () => undefined,
+      () => undefined,
+    ),
   );
   return run;
 }
 
-async function readJson<T>(file: string, fallback: T): Promise<T> {
-  try {
-    const raw = await readFile(path.join(DIR, file), "utf8");
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function persist(state: StoreShape) {
-  replaceAll([
+async function persist(userId: string, state: StoreShape) {
+  await replaceAll(userId, [
     { kind: "org", id: "current", body: state.org },
     ...state.documents.map((doc) => ({
       kind: "document",
@@ -193,79 +172,63 @@ function persist(state: StoreShape) {
     { kind: "meta", id: "seen", body: state.seenRegulationIds },
     { kind: "meta", id: "activity", body: state.activity },
     { kind: "meta", id: "scan", body: state.scan },
+    { kind: "meta", id: "chats", body: state.chats },
   ]);
 }
 
+async function readState(userId: string): Promise<StoreShape> {
+  return {
+    org: normalizeOrg(await readOne<OrgProfile>(userId, "org", "current", seedOrg)),
+    documents: await readKind<StoredDocument>(userId, "document"),
+    chunks: await readKind<Chunk>(userId, "chunk"),
+    reports: (await readKind<Report>(userId, "report")).map(normalizeReport),
+    seenRegulationIds: await readOne<string[]>(userId, "meta", "seen", []),
+    activity: await readOne<ActivityEvent[]>(userId, "meta", "activity", []),
+    scan: await readOne<ScanState>(userId, "meta", "scan", EMPTY_SCAN),
+    chats: await readOne<StoredChat[]>(userId, "meta", "chats", []),
+  };
+}
+
+function freshState(): StoreShape {
+  const documents = seedDocuments.map((doc) => ({ ...doc }));
+  const state: StoreShape = {
+    org: normalizeOrg(seedOrg),
+    documents,
+    chunks: documents.flatMap(chunkDocument),
+    reports: [],
+    seenRegulationIds: [],
+    activity: [],
+    scan: EMPTY_SCAN,
+    chats: [],
+  };
+  ensureBuiltInSamples(state);
+  return state;
+}
+
 export async function loadStore(): Promise<StoreShape> {
-  if (memory) return memory;
-  return withLock(async () => {
-    if (memory) return memory;
-    await mkdir(DIR, { recursive: true });
-    if (countRecords() > 0) {
-      memory = {
-        org: normalizeOrg(readOne<OrgProfile>("org", "current", seedOrg)),
-        documents: readKind<StoredDocument>("document"),
-        chunks: readKind<Chunk>("chunk"),
-        reports: readKind<Report>("report").map(normalizeReport),
-        seenRegulationIds: readOne<string[]>("meta", "seen", []),
-        activity: readOne<ActivityEvent[]>("meta", "activity", []),
-        scan: readOne<ScanState>("meta", "scan", EMPTY_SCAN),
-      };
-      if (scrubMemory(memory) || ensureBuiltInSamples(memory)) persist(memory);
-      return memory;
+  const userId = await requireUserId();
+  const cached = memories.get(userId);
+  if (cached) return cached;
+  return withLock(userId, async () => {
+    const again = memories.get(userId);
+    if (again) return again;
+    const count = await countRecords(userId);
+    const state = count > 0 ? await readState(userId) : freshState();
+    if (count === 0 || scrubMemory(state) || ensureBuiltInSamples(state)) {
+      await persist(userId, state);
     }
-    const org = await readJson<OrgProfile>("org.json", seedOrg);
-    const documents = await readJson<StoredDocument[]>("documents.json", []);
-    const chunks = await readJson<Chunk[]>("chunks.json", []);
-    const reports = await readJson<Report[]>("reports.json", []);
-    const seenRegulationIds = await readJson<string[]>(
-      "seen-regulations.json",
-      [],
-    );
+    memories.set(userId, state);
+    return state;
+  });
+}
 
-    const orgIsLegacy = mentionsClient(org.name);
-    const byId = new Map(
-      documents.filter(isKeepDocument).map((d) => [d.id, d]),
-    );
-    for (const doc of seedDocuments) byId.set(doc.id, doc);
-    const nextDocs = mentionsClient(JSON.stringify([...byId.values()]))
-      ? scrubJson([...byId.values()])
-      : [...byId.values()];
-    const nextOrg = normalizeOrg(orgIsLegacy ? seedOrg : org);
-    const idsChanged =
-      nextDocs.length !== documents.length ||
-      nextDocs.some((d) => !documents.find((x) => x.id === d.id));
-    const missingSeed = seedDocuments.some(
-      (s) => !documents.find((d) => d.id === s.id),
-    );
-
-    if (orgIsLegacy || idsChanged || missingSeed) {
-      memory = {
-        org: nextOrg,
-        documents: nextDocs,
-        chunks: nextDocs.flatMap(chunkDocument),
-        reports: reports.map(normalizeReport),
-        seenRegulationIds,
-        activity: [],
-        scan: EMPTY_SCAN,
-      };
-      if (ensureBuiltInSamples(memory)) persist(memory);
-      else persist(memory);
-      return memory;
-    }
-
-    memory = {
-      org: normalizeOrg(org),
-      documents,
-      chunks,
-      reports: reports.map(normalizeReport),
-      seenRegulationIds,
-      activity: [],
-      scan: EMPTY_SCAN,
-    };
-    if (ensureBuiltInSamples(memory)) persist(memory);
-    else persist(memory);
-    return memory;
+async function edit<T>(fn: (state: StoreShape) => T | Promise<T>) {
+  const userId = await requireUserId();
+  return withLock(userId, async () => {
+    const state = await loadStore();
+    const result = await fn(state);
+    await persist(userId, state);
+    return result;
   });
 }
 
@@ -284,6 +247,7 @@ function scrubMemory(state: StoreShape) {
   state.chunks = scrubJson(state.chunks);
   state.reports = scrubJson(state.reports);
   state.activity = scrubJson(state.activity);
+  state.chats = scrubJson(state.chats);
   return true;
 }
 
@@ -343,8 +307,7 @@ export async function getOrg() {
 }
 
 export async function saveOrg(patch: Partial<OrgProfile>) {
-  return withLock(async () => {
-    const state = await loadStore();
+  return edit((state) => {
     state.org = {
       ...state.org,
       ...patch,
@@ -354,7 +317,6 @@ export async function saveOrg(patch: Partial<OrgProfile>) {
       action: "org",
       detail: `Updated organization snapshot for ${state.org.name}.`,
     });
-    persist(state);
     return state.org;
   });
 }
@@ -370,8 +332,7 @@ export async function getDocument(id: string) {
 export async function addDocument(
   input: Omit<StoredDocument, "id" | "createdAt"> & { id?: string },
 ) {
-  return withLock(async () => {
-    const state = await loadStore();
+  return edit((state) => {
     const doc: StoredDocument = {
       ...input,
       id: input.id ?? createId("doc"),
@@ -394,7 +355,6 @@ export async function addDocument(
           : `Saved ${doc.kind} “${doc.title}”.`,
       documentId: doc.id,
     });
-    persist(state);
     return { doc, chunks: freshChunks };
   });
 }
@@ -404,11 +364,9 @@ export async function listChunks() {
 }
 
 export async function saveChunks(updated: Chunk[]) {
-  return withLock(async () => {
-    const state = await loadStore();
+  return edit((state) => {
     const byId = new Map(updated.map((c) => [c.id, c]));
     state.chunks = state.chunks.map((c) => byId.get(c.id) ?? c);
-    persist(state);
   });
 }
 
@@ -421,8 +379,7 @@ export async function getReport(id: string) {
 }
 
 export async function addReport(report: Report) {
-  return withLock(async () => {
-    const state = await loadStore();
+  return edit((state) => {
     state.reports = [report, ...state.reports.filter((r) => r.id !== report.id)];
     remember(state, {
       action: "report",
@@ -430,7 +387,6 @@ export async function addReport(report: Report) {
       reportId: report.id,
       documentId: report.documentId,
     });
-    persist(state);
     return report;
   });
 }
@@ -440,8 +396,7 @@ export async function updateReport(
   patch: (report: Report) => Report,
   activity?: Omit<ActivityEvent, "id" | "at" | "reportId">,
 ) {
-  return withLock(async () => {
-    const state = await loadStore();
+  return edit((state) => {
     const current = state.reports.find((report) => report.id === id);
     if (!current) return null;
     const next = normalizeReport(patch(current));
@@ -451,19 +406,16 @@ export async function updateReport(
     if (activity) {
       remember(state, { ...activity, reportId: id });
     }
-    persist(state);
     return next;
   });
 }
 
 export async function markRegulationsSeen(ids: string[]) {
-  return withLock(async () => {
-    const state = await loadStore();
+  return edit((state) => {
     const set = new Set(state.seenRegulationIds);
     for (const id of ids) set.add(id);
     state.seenRegulationIds = [...set];
     state.scan = { ...state.scan, newIds: [] };
-    persist(state);
     return state.seenRegulationIds;
   });
 }
@@ -477,11 +429,20 @@ export async function listActivity() {
 }
 
 export async function logActivity(event: Omit<ActivityEvent, "id" | "at">) {
-  return withLock(async () => {
-    const state = await loadStore();
+  return edit((state) => {
     remember(state, event);
-    persist(state);
     return state.activity[0];
+  });
+}
+
+export async function listChats() {
+  return (await loadStore()).chats;
+}
+
+export async function replaceChats(chats: StoredChat[]) {
+  return edit((state) => {
+    state.chats = chats.slice(0, 40);
+    return state.chats;
   });
 }
 
@@ -490,10 +451,8 @@ export async function getScan() {
 }
 
 export async function saveScan(scan: ScanState) {
-  return withLock(async () => {
-    const state = await loadStore();
+  return edit((state) => {
     state.scan = scan;
-    persist(state);
     return state.scan;
   });
 }

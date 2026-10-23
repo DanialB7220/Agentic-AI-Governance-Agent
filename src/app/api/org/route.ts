@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { jsonError } from "@/lib/http";
+import { authed } from "@/lib/session";
 import { FRAMEWORKS } from "@/lib/types";
 import { getOrg, saveOrg } from "@/lib/store";
 
@@ -16,13 +17,13 @@ const Patch = z.object({
   notes: z.string().max(4000).optional(),
 });
 
-export async function GET() {
+export const GET = authed(async () => {
   return Response.json({ org: await getOrg() });
-}
+});
 
-export async function PUT(req: Request) {
+export const PUT = authed(async (req) => {
   const parsed = Patch.safeParse(await req.json());
   if (!parsed.success) return jsonError("Invalid org payload.");
   const org = await saveOrg(parsed.data);
   return Response.json({ org });
-}
+});

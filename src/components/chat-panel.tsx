@@ -6,7 +6,7 @@ import { ArrowUp, FileUp, LoaderCircle, Plus, Sparkles, Trash2 } from "lucide-re
 import { DuplicateChoiceDialog } from "./regulation-dialogs";
 import { Markdown } from "./markdown";
 import { scrubJson } from "@/lib/scrub-names";
-import type { ChatEvent, DocumentKind, Report, StoredDocument } from "@/lib/types";
+import type { ChatEvent, DocumentKind, Report, StoredChat, StoredDocument } from "@/lib/types";
 
 const STARTERS = [
   {
@@ -40,29 +40,12 @@ type Message = {
   report?: Report;
 };
 
-type ChatThread = {
-  id: string;
-  title: string;
-  updatedAt: string;
-  messages: Message[];
-};
-
-const CHAT_STORE_KEY = "aegis:chats";
+type ChatThread = StoredChat;
 
 function threadTitle(messages: Message[]) {
   const first = messages.find((message) => message.role === "user")?.content ?? "New chat";
   const clean = first.replace(/\s+/g, " ").trim();
   return clean.length > 42 ? `${clean.slice(0, 42)}…` : clean || "New chat";
-}
-
-function loadThreads(): ChatThread[] {
-  try {
-    const raw = localStorage.getItem(CHAT_STORE_KEY);
-    const parsed = raw ? (JSON.parse(raw) as ChatThread[]) : [];
-    return Array.isArray(parsed) ? scrubJson(parsed) : [];
-  } catch {
-    return [];
-  }
 }
 
 type IngestReply = {
@@ -130,13 +113,38 @@ export function ChatPanel({
 
   useEffect(() => {
     loadSaved();
-    setThreads(loadThreads());
-    setHistoryReady(true);
+    let cancel = false;
+    fetch("/api/chats")
+      .then((res) => {
+        if (res.status === 401) {
+          window.location.assign("/login");
+          return null;
+        }
+        return res.json();
+      })
+      .then((json) => {
+        if (cancel || !json) return;
+        setThreads(Array.isArray(json.chats) ? scrubJson(json.chats) : []);
+        setHistoryReady(true);
+      })
+      .catch(() => {
+        if (!cancel) setHistoryReady(true);
+      });
+    return () => {
+      cancel = true;
+    };
   }, []);
 
   useEffect(() => {
     if (!historyReady) return;
-    localStorage.setItem(CHAT_STORE_KEY, JSON.stringify(threads));
+    const handle = window.setTimeout(() => {
+      void fetch("/api/chats", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chats: threads }),
+      });
+    }, 500);
+    return () => window.clearTimeout(handle);
   }, [threads, historyReady]);
 
   useEffect(() => {

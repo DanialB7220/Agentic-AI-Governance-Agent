@@ -1,9 +1,10 @@
+import { authed } from "@/lib/session";
 import { riskForStatus } from "@/lib/frameworks";
 import { getScan, listDocuments, listReports } from "@/lib/store";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export const GET = authed(async () => {
   const [reports, documents, scan] = await Promise.all([
     listReports(),
     listDocuments(),
@@ -43,4 +44,4 @@ export async function GET() {
     })),
     scan,
   });
-}
+});

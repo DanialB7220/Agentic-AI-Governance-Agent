@@ -1,66 +1,50 @@
-import { mkdirSync } from "node:fs";
-import path from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import { getDb } from "./mongo";
 
-const DIR = path.join(process.cwd(), "data", "runtime");
-const FILE = path.join(DIR, "aegis.db");
+type Entry = { kind: string; id: string; body: unknown };
 
-type DbGlobal = typeof globalThis & { aegisDb?: DatabaseSync };
-
-function database() {
-  const g = globalThis as DbGlobal;
-  if (!g.aegisDb) {
-    mkdirSync(DIR, { recursive: true });
-    const db = new DatabaseSync(FILE);
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS records (
-        kind TEXT NOT NULL,
-        id TEXT NOT NULL,
-        body TEXT NOT NULL,
-        PRIMARY KEY (kind, id)
-      );
-    `);
-    g.aegisDb = db;
-  }
-  return g.aegisDb;
+export async function countRecords(userId: string) {
+  const db = await getDb();
+  return db.collection("records").countDocuments({ userId });
 }
 
-export function countRecords() {
-  const row = database()
-    .prepare("SELECT COUNT(*) AS n FROM records")
-    .get() as { n: number };
-  return Number(row.n);
+export async function readKind<T>(userId: string, kind: string): Promise<T[]> {
+  const db = await getDb();
+  const rows = await db
+    .collection("records")
+    .find({ userId, kind })
+    .sort({ id: 1 })
+    .toArray();
+  return rows.map((row) => row.body as T);
 }
 
-export function readKind<T>(kind: string): T[] {
-  const rows = database()
-    .prepare("SELECT body FROM records WHERE kind = ? ORDER BY rowid")
-    .all(kind) as { body: string }[];
-  return rows.map((row) => JSON.parse(row.body) as T);
-}
-
-export function readOne<T>(kind: string, id: string, fallback: T): T {
-  const row = database()
-    .prepare("SELECT body FROM records WHERE kind = ? AND id = ?")
-    .get(kind, id) as { body: string } | undefined;
+export async function readOne<T>(
+  userId: string,
+  kind: string,
+  id: string,
+  fallback: T,
+): Promise<T> {
+  const db = await getDb();
+  const row = await db.collection("records").findOne({ userId, kind, id });
   if (!row) return fallback;
-  return JSON.parse(row.body) as T;
+  return row.body as T;
 }
 
-export function replaceAll(entries: { kind: string; id: string; body: unknown }[]) {
-  const db = database();
-  const insert = db.prepare(
-    "INSERT INTO records (kind, id, body) VALUES (?, ?, ?)",
-  );
-  db.exec("BEGIN");
+export async function replaceAll(userId: string, entries: Entry[]) {
+  const db = await getDb();
+  const col = db.collection("records");
+  const docs = entries.map((entry) => ({
+    userId,
+    kind: entry.kind,
+    id: entry.id,
+    body: entry.body,
+  }));
+  const session = db.client.startSession();
   try {
-    db.exec("DELETE FROM records");
-    for (const entry of entries) {
-      insert.run(entry.kind, entry.id, JSON.stringify(entry.body));
-    }
-    db.exec("COMMIT");
-  } catch (err) {
-    db.exec("ROLLBACK");
-    throw err;
+    await session.withTransaction(async () => {
+      await col.deleteMany({ userId }, { session });
+      if (docs.length > 0) await col.insertMany(docs, { session });
+    });
+  } finally {
+    await session.endSession();
   }
 }

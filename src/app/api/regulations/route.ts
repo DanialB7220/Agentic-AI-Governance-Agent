@@ -4,14 +4,15 @@ import { alreadySavedPayload, findSavedRegulation } from "@/lib/duplicates";
 import { fetchFederalRegisterFullText } from "@/lib/extract-upload";
 import { ingestDocument } from "@/lib/ingest";
 import { jsonError } from "@/lib/http";
+import { authed } from "@/lib/session";
 import { z } from "zod";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export const GET = authed(async () => {
   const items = await fetchRegulationFeed();
   return Response.json({ items });
-}
+});
 
 const IngestBody = z.object({
   id: z.string(),
@@ -22,7 +23,7 @@ const IngestBody = z.object({
   agency: z.string().optional(),
 });
 
-export async function POST(req: Request) {
+export const POST = authed(async (req) => {
   const parsed = IngestBody.safeParse(await req.json());
   if (!parsed.success) return jsonError("Invalid regulation payload.");
   const { id, title, abstract, url, publishedAt, agency } = parsed.data;
@@ -52,4 +53,4 @@ export async function POST(req: Request) {
         err instanceof Error ? err.message : "Could not analyze this rule.",
     });
   }
-}
+});

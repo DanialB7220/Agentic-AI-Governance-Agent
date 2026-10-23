@@ -6,5 +6,5 @@ export async function POST(req: Request) {
   const denied = requireApiKey(req);
   if (denied) return denied;
   const { POST: chat } = await import("../../chat/route");
-  return chat(req);
+  return chat(req, { params: Promise.resolve({}) });
 }

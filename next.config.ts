@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
     "@aws-sdk/client-bedrock-runtime",
     "@aws-sdk/client-bedrock-agent-runtime",
     "unpdf",
+    "mongodb",
   ],
 };
 

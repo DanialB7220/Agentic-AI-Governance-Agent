@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 const NAV = [
-  { href: "/", label: "Copilot", icon: MessageSquare },
+  { href: "/copilot", label: "Copilot", icon: MessageSquare },
   { href: "/regulations", label: "Regulations", icon: BookOpen },
   { href: "/org", label: "Organization", icon: Building2 },
   { href: "/reports", label: "Reports", icon: FileBarChart },
@@ -29,7 +29,13 @@ type Health = {
   embeddings?: number;
 };
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  user,
+}: {
+  children: React.ReactNode;
+  user: { name: string; email: string };
+}) {
   const pathname = usePathname();
   const [health, setHealth] = useState<Health | null>(null);
 
@@ -40,10 +46,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       .catch(() => setHealth(null));
   }, []);
 
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.assign("/");
+  }
+
   return (
     <div className="flex min-h-full">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-white/10 bg-slate-950/60 p-4 backdrop-blur-xl md:flex">
-        <Link href="/" className="mb-8 flex items-center gap-2 px-2">
+        <Link href="/copilot" className="mb-8 flex items-center gap-2 px-2">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/15 text-amber-400">
             <Shield className="h-5 w-5" aria-hidden />
           </span>
@@ -56,9 +67,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="flex flex-1 flex-col gap-1" aria-label="Main">
           {NAV.map((item) => {
             const active =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
+              pathname === item.href || pathname.startsWith(`${item.href}/`);
             const Icon = item.icon;
             return (
               <Link
@@ -76,6 +85,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
+
+        <div className="mb-3 rounded-xl border border-white/10 bg-white/4 px-3 py-3 text-xs text-slate-400">
+          <p className="truncate font-medium text-slate-200">{user.name}</p>
+          <p className="truncate">{user.email}</p>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="mt-3 cursor-pointer text-amber-300 hover:text-amber-200"
+          >
+            Log out
+          </button>
+        </div>
 
         <div className="rounded-xl border border-white/10 bg-white/4 px-3 py-3 text-xs text-slate-400">
           <p className="mb-1 font-medium text-slate-200">Retrieval</p>
@@ -100,9 +121,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-3 border-b border-white/10 px-4 py-3 md:hidden">
-          <Shield className="h-5 w-5 text-amber-400" aria-hidden />
-          <span className="font-semibold">Governance Agent</span>
+        <header className="flex items-center justify-between gap-3 border-b border-white/10 px-4 py-3 md:hidden">
+          <span className="flex items-center gap-3">
+            <Shield className="h-5 w-5 text-amber-400" aria-hidden />
+            <span className="font-semibold">Governance Agent</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="cursor-pointer text-sm text-amber-300"
+          >
+            Log out
+          </button>
         </header>
         <nav
           className="flex gap-1 overflow-x-auto border-b border-white/10 px-3 py-2 md:hidden"
@@ -110,9 +140,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         >
           {NAV.map((item) => {
             const active =
-              item.href === "/"
-                ? pathname === "/"
-                : pathname.startsWith(item.href);
+              pathname === item.href || pathname.startsWith(`${item.href}/`);
             return (
               <Link
                 key={item.href}

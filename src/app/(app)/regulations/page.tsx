@@ -109,7 +109,7 @@ export default function RegulationsPage() {
     if (!item.ingested) await ingestItem(item);
     const prompt = `Analyze this regulation against our current organization and produce a gap report with a 30/60/90 implementation plan:\n\n${item.title}\n${item.agency} · ${item.publishedAt}\n${item.abstract}`;
     sessionStorage.setItem("aegis:preset", prompt);
-    router.push("/?analyze=1");
+    router.push("/copilot");
   }
 
   function savedUpload(json: {
