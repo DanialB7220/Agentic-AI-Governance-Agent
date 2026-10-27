@@ -65,6 +65,13 @@ export type RiskLevel = "high" | "medium" | "low";
 export type ChangeStatus = "open" | "in_progress" | "done";
 export type RemediationStatus = "open" | "done";
 
+/** Who does what on a gap or policy edit. */
+export type TeamActionItem = {
+  team: string;
+  level: string;
+  task: string;
+};
+
 export type GapFinding = {
   controlId: string;
   framework: FrameworkId;
@@ -77,6 +84,8 @@ export type GapFinding = {
   policyRefs?: string[];
   updateText?: string;
   owner?: string;
+  team?: string;
+  actionItems?: TeamActionItem[];
   dueDate?: string;
   remediationStatus?: RemediationStatus;
 };
@@ -88,6 +97,8 @@ export type RoadmapItem = {
   controlIds: string[];
   policyRefs?: string[];
   owner?: string;
+  team?: string;
+  actionItems?: TeamActionItem[];
   dueDate?: string;
   status?: RemediationStatus;
 };
@@ -98,6 +109,8 @@ export type PolicyChange = {
   issue: string;
   action: string;
   owner: string;
+  team: string;
+  actionItems: TeamActionItem[];
   dueDate: string;
   status: ChangeStatus;
 };

@@ -5,7 +5,44 @@ import { use, useEffect, useState } from "react";
 import { Markdown } from "@/components/markdown";
 import { StatusBadge } from "@/components/status-badge";
 import { FRAMEWORK_LABEL } from "@/lib/frameworks";
-import type { Report } from "@/lib/types";
+import type { Report, TeamActionItem } from "@/lib/types";
+
+function TeamActionList({ items }: { items?: TeamActionItem[] }) {
+  if (!items?.length) return null;
+  return (
+    <ul className="mt-3 grid gap-1.5">
+      {items.map((item, index) => (
+        <li
+          key={`${item.team}-${index}`}
+          className="rounded-lg bg-white/5 px-3 py-2 text-xs leading-5 text-slate-300"
+        >
+          <span className="font-medium text-amber-200">{item.team}</span>
+          <span className="text-slate-500"> · {item.level}</span>
+          <p className="mt-0.5 text-slate-400">{item.task}</p>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function rollupByTeam(report: Report) {
+  const map = new Map<string, { level: string; task: string; source: string }[]>();
+  const push = (items: TeamActionItem[] | undefined, source: string) => {
+    for (const item of items ?? []) {
+      const list = map.get(item.team) ?? [];
+      list.push({ level: item.level, task: item.task, source });
+      map.set(item.team, list);
+    }
+  };
+  for (const change of report.changes ?? []) {
+    push(change.actionItems, change.policyTitle);
+  }
+  for (const finding of report.findings) {
+    if (finding.status === "covered") continue;
+    push(finding.actionItems, finding.title);
+  }
+  return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
 
 export default function ReportDetailPage({
   params,
@@ -55,6 +92,8 @@ export default function ReportDetailPage({
   if (!report) {
     return <p className="p-8 text-sm text-slate-400">Loading report…</p>;
   }
+
+  const teamRollup = rollupByTeam(report);
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -137,6 +176,10 @@ export default function ReportDetailPage({
                   <p className="mt-1 text-xs text-slate-400">{c.issue}</p>
                 ) : null}
                 <p className="mt-1 text-sm text-slate-300">{c.action}</p>
+                <p className="mt-2 text-[11px] uppercase tracking-wide text-amber-300/90">
+                  Team: {c.team || "Governance"}
+                </p>
+                <TeamActionList items={c.actionItems} />
                 <div className="mt-3 grid gap-2 sm:grid-cols-3">
                   <label className="text-xs text-slate-500">
                     Owner
@@ -225,16 +268,46 @@ export default function ReportDetailPage({
                 {f.updateText ?? f.action}
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-slate-400">
-                <span>Owner: {f.owner ?? "Compliance Lead"}</span>
+                <span>Team: {f.team ?? "Governance"}</span>
+                <span>Owner: {f.owner ?? "Governance Lead"}</span>
                 <span>Due: {f.dueDate ?? "TBD"}</span>
                 <span>
                   {f.remediationStatus === "done" ? "Done" : "Open"}
                 </span>
               </div>
+              <TeamActionList items={f.actionItems} />
             </li>
           ))}
         </ul>
       </section>
+
+      {teamRollup.length > 0 ? (
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold text-amber-200">
+            Action items by team
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            What Governance, Engineering, Market access, MLR, and the other teams each own.
+          </p>
+          <div className="mt-3 grid gap-3">
+            {teamRollup.map(([team, tasks]) => (
+              <article key={team} className="glass rounded-xl px-4 py-3">
+                <p className="text-sm font-medium text-white">{team}</p>
+                <ul className="mt-2 grid gap-2">
+                  {tasks.slice(0, 8).map((task, index) => (
+                    <li key={`${team}-${index}`} className="text-xs leading-5 text-slate-400">
+                      <span className="text-slate-300">{task.level}</span>
+                      {" — "}
+                      {task.task}
+                      <span className="text-slate-600"> · {task.source}</span>
+                    </li>
+                  ))}
+                </ul>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section className="mt-8">
         <h2 className="text-sm font-semibold text-amber-200">Roadmap</h2>
@@ -247,10 +320,12 @@ export default function ReportDetailPage({
               <p className="font-medium">{item.title}</p>
               <p className="text-slate-400">{item.detail}</p>
               <div className="mt-2 flex flex-wrap items-center gap-3 text-[11px] text-slate-500">
-                <span>Owner: {item.owner ?? "Compliance Lead"}</span>
+                <span>Team: {item.team ?? "Governance"}</span>
+                <span>Owner: {item.owner ?? "Governance Lead"}</span>
                 <span>Due: {item.dueDate ?? "TBD"}</span>
                 <span>{item.status === "done" ? "Done" : "Open"}</span>
               </div>
+              <TeamActionList items={item.actionItems} />
             </li>
           ))}
         </ul>

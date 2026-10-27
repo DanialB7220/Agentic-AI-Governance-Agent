@@ -4,6 +4,11 @@ import { createId } from "./ids";
 import { retrieve } from "./rag";
 import { fetchRegulationFeed } from "./regulations";
 import { addReport, getOrg, listDocuments } from "./store";
+import {
+  actionItemsForFinding,
+  actionItemsForPolicyChange,
+  leadForTeam,
+} from "./teams";
 import type {
   ChatEvent,
   FrameworkId,
@@ -13,6 +18,7 @@ import type {
   RetrievedChunk,
   RoadmapItem,
   StoredDocument,
+  TeamActionItem,
 } from "./types";
 
 const AUDIT_RE =
@@ -175,14 +181,23 @@ async function runAuditor(input: {
     const policyRefs = inferPolicyRefs(c, input.policyDocuments);
     const status: "open" | "done" =
       base.status === "covered" ? "done" : "open";
+    const updateText =
+      base.status === "covered"
+        ? `No change required for ${c.title}; keep evidence current.`
+        : `${c.action} Update the relevant policy text in ${policyRefs.join(", ")}.`;
+    const staffing = actionItemsForFinding({
+      title: c.title,
+      action: updateText,
+      framework: c.framework,
+      status: base.status,
+    });
     return {
       ...base,
       policyRefs,
-      updateText:
-        base.status === "covered"
-          ? `No change required for ${c.title}; keep evidence current.`
-          : `${c.action} Update the relevant policy text in ${policyRefs.join(", ")}.`,
-      owner: pickOwner(c.framework),
+      updateText,
+      owner: staffing.owner,
+      team: staffing.team,
+      actionItems: staffing.actionItems,
       dueDate: fmtDueDate(
         base.status === "covered" ? 14 : base.status === "partial" ? 30 : 45,
       ),
@@ -224,7 +239,7 @@ async function runAuditor(input: {
 
   const narrative = await completeChat({
     system:
-      "You are Auditor. Rewrite the readiness memo in clear English. Keep every finding and every policy change. Do not invent evidence. Label this as an internal memo, not a CMS filing, SOC attestation, or legal opinion. Use markdown. Treat the org as a healthcare company and plan partner, not an MA organization, unless the org notes say otherwise.",
+      "You are Auditor. Rewrite the readiness memo in clear English. Keep every finding, every policy change, and every team action item (Governance, Market access, Engineering, MLR, Legal, Privacy, Security, Finance, Patient support). Name the accountable team and what each level should do. Do not invent evidence. Label this as an internal memo, not a CMS filing, SOC attestation, or legal opinion. Use markdown. Treat the org as a healthcare company and plan partner, not an MA organization, unless the org notes say otherwise.",
     user: `${structured}\n\nScout notes (use for context, do not treat as org evidence):\n${input.scoutNotes}`,
     maxTokens: 1800,
   });
@@ -249,13 +264,21 @@ async function runAuditor(input: {
   };
 }
 
+type DraftChange = {
+  policyTitle: string;
+  issue: string;
+  action: string;
+  team?: string;
+  actionItems?: TeamActionItem[];
+};
+
 async function draftPolicyChanges(input: {
   orgName: string;
   retrieved: RetrievedChunk[];
   scoutNotes: string;
   query: string;
   docTitles: string[];
-}): Promise<Array<Pick<PolicyChange, "policyTitle" | "issue" | "action">>> {
+}): Promise<DraftChange[]> {
   const policies = input.retrieved.filter(
     (r) => r.chunk.metadata.kind !== "regulation",
   );
@@ -281,9 +304,9 @@ async function draftPolicyChanges(input: {
 
   const raw = await completeChat({
     system:
-      'Return ONLY a JSON array of objects with keys policyTitle, issue, action. Each item is one concrete edit to a named internal policy already on file. Never treat regulation text as proof of compliance. If unsure, still propose the most likely SOP edits. No markdown.',
+      'Return ONLY a JSON array of objects with keys policyTitle, issue, action, team, actionItems. team must be one of: Governance, Market access, Finance, MLR, Patient support, Engineering, Legal, Privacy, Security. actionItems is an array of {team, level, task} where level is Accountable, Responsible, Consulted, or Informed. Each item is one concrete edit to a named internal policy already on file. Never treat regulation text as proof of compliance. If unsure, still propose the most likely SOP edits and name the teams that must act. No markdown.',
     user: `Org: ${input.orgName}\nInternal policies on file: ${input.docTitles.join("; ") || "(none)"}\nQuestion: ${input.query}\n\n${regBlock || "(no regulation passages)"}\n\n${policyBlock || "(no retrieved policy passages)"}\n\nScout:\n${input.scoutNotes.slice(0, 1500)}`,
-    maxTokens: 900,
+    maxTokens: 1400,
   });
   const fallback = () =>
     policies.length > 0
@@ -300,7 +323,7 @@ async function draftPolicyChanges(input: {
     const end = raw.lastIndexOf("]");
     const parsed = JSON.parse(
       start >= 0 && end > start ? raw.slice(start, end + 1) : raw,
-    ) as Array<Pick<PolicyChange, "policyTitle" | "issue" | "action">>;
+    ) as Array<Partial<DraftChange>>;
     const rows = parsed
       .filter((row) => row.policyTitle && row.action)
       .slice(0, 8)
@@ -308,6 +331,17 @@ async function draftPolicyChanges(input: {
         policyTitle: String(row.policyTitle).slice(0, 200),
         issue: String(row.issue || "").slice(0, 400),
         action: String(row.action).slice(0, 400),
+        team: row.team ? String(row.team).slice(0, 40) : undefined,
+        actionItems: Array.isArray(row.actionItems)
+          ? row.actionItems
+              .filter((item) => item && item.team && item.task)
+              .slice(0, 6)
+              .map((item) => ({
+                team: String(item.team).slice(0, 40),
+                level: String(item.level || "Responsible").slice(0, 24),
+                task: String(item.task).slice(0, 320),
+              }))
+          : undefined,
       }));
     return rows.length > 0 ? rows : fallback();
   } catch {
@@ -321,21 +355,33 @@ function dueIn(days: number) {
   return date.toISOString().slice(0, 10);
 }
 
-function stampChanges(
-  changes: Array<Pick<PolicyChange, "policyTitle" | "issue" | "action">>,
-): PolicyChange[] {
-  return changes.map((change, index) => ({
-    ...change,
-    id: createId("chg"),
-    owner: "Policy owner",
-    dueDate: dueIn(index === 0 ? 30 : index === 1 ? 60 : 90),
-    status: "open" as const,
-  }));
+function stampChanges(changes: DraftChange[]): PolicyChange[] {
+  return changes.map((change, index) => {
+    const staffing = actionItemsForPolicyChange({
+      policyTitle: change.policyTitle,
+      issue: change.issue,
+      action: change.action,
+      team: change.team,
+    });
+    const actionItems =
+      change.actionItems && change.actionItems.length > 0
+        ? change.actionItems
+        : staffing.actionItems;
+    return {
+      policyTitle: change.policyTitle,
+      issue: change.issue,
+      action: change.action,
+      id: createId("chg"),
+      owner: staffing.owner,
+      team: staffing.team,
+      actionItems,
+      dueDate: dueIn(index === 0 ? 30 : index === 1 ? 60 : 90),
+      status: "open" as const,
+    };
+  });
 }
 
-function fallbackChanges(
-  policies: RetrievedChunk[],
-): Array<Pick<PolicyChange, "policyTitle" | "issue" | "action">> {
+function fallbackChanges(policies: RetrievedChunk[]): DraftChange[] {
   return policies.slice(0, 3).map((r) => ({
     policyTitle: r.chunk.metadata.title,
     issue: "This internal document may not match the new rule language we retrieved.",
@@ -419,14 +465,13 @@ function inferPolicyRefs(
 }
 
 function pickOwner(framework: FrameworkId) {
-  const owners: Record<FrameworkId, string> = {
-    soc2: "Security Governance Lead",
-    "pci-dss": "Security Operations Lead",
-    gdpr: "Privacy Program Manager",
-    "nist-csf": "Risk & Controls Manager",
-    "cms-ma-pd": "Market Access & Finance Lead",
-  };
-  return owners[framework] ?? "Compliance Lead";
+  const staffing = actionItemsForFinding({
+    title: framework,
+    action: "Close the open control.",
+    framework,
+    status: "missing",
+  });
+  return staffing.owner;
 }
 
 function fmtDueDate(offsetDays: number) {
@@ -448,6 +493,8 @@ function buildRoadmap(findings: GapFinding[]): RoadmapItem[] {
         controlIds: [f.controlId],
         policyRefs: f.policyRefs ?? ["Policy review"],
         owner: f.owner ?? pickOwner(f.framework),
+        team: f.team,
+        actionItems: f.actionItems,
         dueDate: f.dueDate ?? fmtDueDate(30),
         status: f.remediationStatus ?? (f.status === "covered" ? "done" : "open"),
       });
@@ -466,7 +513,20 @@ function buildRoadmap(findings: GapFinding[]): RoadmapItem[] {
       detail: "Re-upload policies after each material change and re-run this memo.",
       controlIds: [],
       policyRefs: ["Policy review"],
-      owner: "Compliance Lead",
+      owner: leadForTeam("Governance"),
+      team: "Governance",
+      actionItems: [
+        {
+          team: "Governance",
+          level: "Accountable",
+          task: "Re-upload policies after each material change and re-run this memo.",
+        },
+        {
+          team: "Engineering",
+          level: "Informed",
+          task: "Confirm no system evidence is missing from the pack.",
+        },
+      ],
       dueDate: fmtDueDate(15),
       status: "open",
     });
@@ -527,7 +587,11 @@ function renderReport(input: {
         `### ${c.policyTitle}`,
         `Issue: ${c.issue}`,
         `Change: ${c.action}`,
-        `Owner: ${c.owner || "Policy owner"} · Due: ${c.dueDate || "unset"} · ${c.status || "open"}`,
+        `Team: ${c.team || "Governance"} · Owner: ${c.owner || "Policy owner"} · Due: ${c.dueDate || "unset"} · ${c.status || "open"}`,
+        "Action items:",
+        ...(c.actionItems ?? []).map(
+          (item) => `- **${item.team}** (${item.level}): ${item.task}`,
+        ),
         "",
       );
     }
@@ -542,16 +606,52 @@ function renderReport(input: {
       `Evidence: ${f.evidence}`,
       `Policy target: ${(f.policyRefs ?? ["Policy review"]).join(", ")}`,
       `Required change: ${f.updateText ?? f.action}`,
-      `Owner: ${f.owner ?? pickOwner(f.framework)}`,
+      `Team: ${f.team ?? "Governance"} · Owner: ${f.owner ?? pickOwner(f.framework)}`,
       `Due: ${f.dueDate ?? fmtDueDate(30)}`,
       `Status: ${f.remediationStatus ?? (f.status === "covered" ? "done" : "open")}`,
+      "Action items:",
+      ...(f.actionItems ?? []).map(
+        (item) => `- **${item.team}** (${item.level}): ${item.task}`,
+      ),
       "",
     );
   }
 
+  lines.push("## Action items by team");
+  const rolled = new Map<string, string[]>();
+  for (const change of input.changes) {
+    for (const item of change.actionItems ?? []) {
+      const list = rolled.get(item.team) ?? [];
+      list.push(`${item.level}: ${item.task} (policy: ${change.policyTitle})`);
+      rolled.set(item.team, list);
+    }
+  }
+  for (const finding of input.findings) {
+    if (finding.status === "covered") continue;
+    for (const item of finding.actionItems ?? []) {
+      const list = rolled.get(item.team) ?? [];
+      list.push(`${item.level}: ${item.task} (control: ${finding.title})`);
+      rolled.set(item.team, list);
+    }
+  }
+  if (rolled.size === 0) {
+    lines.push("- No open team action items.");
+  } else {
+    for (const [team, tasks] of [...rolled.entries()].sort(([a], [b]) =>
+      a.localeCompare(b),
+    )) {
+      lines.push(`### ${team}`);
+      for (const task of tasks.slice(0, 6)) lines.push(`- ${task}`);
+      lines.push("");
+    }
+  }
+
   lines.push("## 30 / 60 / 90 days");
   for (const item of input.roadmap) {
-    lines.push(`- **${item.window} — ${item.title}:** ${item.detail}`);
+    lines.push(
+      `- **${item.window} — ${item.title}:** ${item.detail}`,
+      item.team ? `  - Team: ${item.team} · Owner: ${item.owner ?? "Governance"}` : "",
+    );
   }
   lines.push(
     "",

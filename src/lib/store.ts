@@ -5,10 +5,12 @@ import { mentionsClient, scrubJson } from "./scrub-names";
 import { seedDocuments, seedOrg } from "./seed";
 import { requireUserId } from "./session";
 import { createId } from "./ids";
+import { actionItemsForFinding, actionItemsForPolicyChange } from "./teams";
 import {
   SCAN_AGENCIES,
   type ActivityEvent,
   type Chunk,
+  type GapFinding,
   type OrgProfile,
   type PolicyChange,
   type Report,
@@ -64,13 +66,34 @@ function normalizeReport(report: Report): Report {
     ...report,
     scope: report.scope || report.summary,
     policiesChecked: report.policiesChecked ?? [],
-    findings: (report.findings ?? []).map((finding) => ({
-      ...finding,
-      risk: finding.risk ?? riskForStatus(finding.status),
-    })),
+    findings: (report.findings ?? []).map(normalizeFinding),
     changes: (report.changes ?? []).map((change, index) =>
       normalizeChange(change, `${report.id}-chg-${index}`, report.createdAt, index),
     ),
+    roadmap: (report.roadmap ?? []).map((item) => ({
+      ...item,
+      team: item.team,
+      actionItems: item.actionItems,
+    })),
+  };
+}
+
+function normalizeFinding(finding: GapFinding): GapFinding {
+  const staffing = actionItemsForFinding({
+    title: finding.title,
+    action: finding.updateText ?? finding.action,
+    framework: finding.framework,
+    status: finding.status,
+  });
+  return {
+    ...finding,
+    risk: finding.risk ?? riskForStatus(finding.status),
+    team: finding.team || staffing.team,
+    owner: finding.owner || staffing.owner,
+    actionItems:
+      finding.actionItems && finding.actionItems.length > 0
+        ? finding.actionItems
+        : staffing.actionItems,
   };
 }
 
@@ -88,12 +111,23 @@ function normalizeChange(
   index = 0,
 ): PolicyChange {
   const status = change.status ?? "open";
+  const staffing = actionItemsForPolicyChange({
+    policyTitle: change.policyTitle || "Policy",
+    issue: change.issue || "",
+    action: change.action || "",
+    team: change.team,
+  });
   return {
     id: change.id || id,
     policyTitle: change.policyTitle || "Policy",
     issue: change.issue || "",
     action: change.action || "",
-    owner: change.owner || "Policy owner",
+    owner: change.owner || staffing.owner,
+    team: change.team || staffing.team,
+    actionItems:
+      change.actionItems && change.actionItems.length > 0
+        ? change.actionItems
+        : staffing.actionItems,
     dueDate: change.dueDate || dueOn(createdAt, index),
     status:
       status === "in_progress" || status === "done" || status === "open"

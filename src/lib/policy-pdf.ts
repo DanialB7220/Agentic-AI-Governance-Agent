@@ -124,12 +124,22 @@ export async function policySuggestionsPdf(report: Report) {
       }
       draw(`Change: ${change.action}`, 10, font, rgb(0.2, 0.22, 0.26), 4);
       draw(
-        `Owner: ${change.owner || "Policy owner"} · Due: ${change.dueDate || "unset"} · ${change.status || "open"}`,
+        `Team: ${change.team || "Governance"} · Owner: ${change.owner || "Policy owner"} · Due: ${change.dueDate || "unset"} · ${change.status || "open"}`,
         10,
         font,
         rgb(0.2, 0.22, 0.26),
-        12,
+        6,
       );
+      for (const item of change.actionItems ?? []) {
+        draw(
+          `${item.team} (${item.level}): ${item.task}`,
+          9,
+          font,
+          rgb(0.28, 0.3, 0.34),
+          3,
+        );
+      }
+      y -= 8;
     });
   }
 
