@@ -34,7 +34,7 @@ export function AppShell({
   user,
 }: {
   children: React.ReactNode;
-  user: { name: string; email: string };
+  user: { name: string; username: string };
 }) {
   const pathname = usePathname();
   const [health, setHealth] = useState<Health | null>(null);
@@ -88,7 +88,7 @@ export function AppShell({
 
         <div className="mb-3 rounded-xl border border-white/10 bg-white/4 px-3 py-3 text-xs text-slate-400">
           <p className="truncate font-medium text-slate-200">{user.name}</p>
-          <p className="truncate">{user.email}</p>
+          <p className="truncate">@{user.username}</p>
           <button
             type="button"
             onClick={() => void logout()}

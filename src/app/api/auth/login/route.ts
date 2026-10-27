@@ -7,13 +7,13 @@ import { logActivity } from "@/lib/store";
 export const runtime = "nodejs";
 
 const Body = z.object({
-  email: z.string().min(3).max(200),
+  username: z.string().min(1).max(40),
   password: z.string().min(1).max(200),
 });
 
 export async function POST(req: Request) {
   const parsed = Body.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return jsonError("Enter your email and password.");
+  if (!parsed.success) return jsonError("Enter your username and password.");
   try {
     const user = await login(parsed.data);
     await bindUser(user.id, () =>

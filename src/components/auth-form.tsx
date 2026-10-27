@@ -25,8 +25,7 @@ export function AuthForm({
     setBusy(true);
     const form = new FormData(event.currentTarget);
     const payload = {
-      name: String(form.get("name") || ""),
-      email: String(form.get("email") || ""),
+      username: String(form.get("username") || ""),
       password: String(form.get("password") || ""),
     };
     try {
@@ -60,20 +59,15 @@ export function AuthForm({
         <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
         <p className="mt-2 text-sm leading-6 text-slate-400">{subtitle}</p>
         <form onSubmit={onSubmit} className="mt-6 grid gap-4">
-          {mode === "signup" ? (
-            <label className="grid gap-1 text-sm">
-              <span className="text-slate-300">Name</span>
-              <input name="name" required autoComplete="name" className="input" />
-            </label>
-          ) : null}
           <label className="grid gap-1 text-sm">
-            <span className="text-slate-300">Email</span>
+            <span className="text-slate-300">Username</span>
             <input
-              name="email"
-              type="email"
+              name="username"
+              type="text"
               required
-              autoComplete="email"
+              autoComplete="username"
               className="input"
+              defaultValue={mode === "login" ? "admin" : undefined}
             />
           </label>
           <label className="grid gap-1 text-sm">
@@ -82,9 +76,10 @@ export function AuthForm({
               name="password"
               type="password"
               required
-              minLength={mode === "signup" ? 8 : 1}
+              minLength={1}
               autoComplete={mode === "login" ? "current-password" : "new-password"}
               className="input"
+              defaultValue={mode === "login" ? "admin" : undefined}
             />
           </label>
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}

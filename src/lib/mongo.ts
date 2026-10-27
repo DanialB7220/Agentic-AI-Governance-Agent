@@ -13,7 +13,7 @@ function uri() {
 }
 
 async function ensureIndexes(db: Db) {
-  await db.collection("users").createIndex({ email: 1 }, { unique: true });
+  await db.collection("users").createIndex({ username: 1 }, { unique: true });
   await db.collection("sessions").createIndex({ tokenHash: 1 }, { unique: true });
   await db.collection("sessions").createIndex({ expiresAt: 1 });
   await db.collection("records").createIndex(

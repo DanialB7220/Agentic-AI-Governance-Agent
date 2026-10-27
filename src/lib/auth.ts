@@ -5,16 +5,18 @@ import { createSalt, hashPassword, passwordsMatch, sha256Hex } from "./password"
 
 const COOKIE = "ga_session";
 const MAX_AGE = 60 * 60 * 24 * 14;
+const ADMIN_USERNAME = "admin";
+const ADMIN_PASSWORD = "admin";
 
 export type PublicUser = {
   id: string;
-  email: string;
+  username: string;
   name: string;
 };
 
 type UserRecord = {
   _id: string;
-  email: string;
+  username: string;
   name: string;
   passwordHash: string;
   salt: string;
@@ -30,7 +32,11 @@ type SessionRecord = {
 };
 
 function publicUser(user: UserRecord): PublicUser {
-  return { id: user._id, email: user.email, name: user.name };
+  return { id: user._id, username: user.username, name: user.name };
+}
+
+function normalizeUsername(value: string) {
+  return value.trim().toLowerCase();
 }
 
 function duplicateKey(err: unknown) {
@@ -63,25 +69,36 @@ async function startSession(userId: string) {
   });
 }
 
-export async function signup(input: {
-  name: string;
-  email: string;
-  password: string;
-}) {
-  const email = input.email.trim().toLowerCase();
-  const name = input.name.trim();
-  if (name.length < 1 || name.length > 80) throw new Error("Enter your name.");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    throw new Error("Enter a valid email.");
+/** Demo login: username admin / password admin. */
+export async function ensureAdminUser() {
+  const db = await getDb();
+  const users = db.collection<UserRecord>("users");
+  const existing = await users.findOne({ username: ADMIN_USERNAME });
+  if (existing) return;
+  const salt = createSalt();
+  await users.insertOne({
+    _id: createId("user"),
+    username: ADMIN_USERNAME,
+    name: "Admin",
+    passwordHash: hashPassword(ADMIN_PASSWORD, salt),
+    salt,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+export async function signup(input: { username: string; password: string }) {
+  const username = normalizeUsername(input.username);
+  if (!/^[a-z0-9._-]{3,40}$/.test(username)) {
+    throw new Error("Use 3–40 letters, numbers, dots, underscores, or hyphens.");
   }
-  if (input.password.length < 8 || input.password.length > 200) {
-    throw new Error("Use at least 8 characters for the password.");
+  if (input.password.length < 1 || input.password.length > 200) {
+    throw new Error("Enter a password.");
   }
   const salt = createSalt();
   const user: UserRecord = {
     _id: createId("user"),
-    email,
-    name,
+    username,
+    name: username,
     passwordHash: hashPassword(input.password, salt),
     salt,
     createdAt: new Date().toISOString(),
@@ -91,7 +108,7 @@ export async function signup(input: {
     await db.collection<UserRecord>("users").insertOne(user);
   } catch (err) {
     if (duplicateKey(err)) {
-      throw new Error("An account with that email already exists.");
+      throw new Error("That username is already taken.");
     }
     throw err;
   }
@@ -99,13 +116,14 @@ export async function signup(input: {
   return publicUser(user);
 }
 
-export async function login(input: { email: string; password: string }) {
-  const email = input.email.trim().toLowerCase();
+export async function login(input: { username: string; password: string }) {
+  await ensureAdminUser();
+  const username = normalizeUsername(input.username);
   const db = await getDb();
-  const user = await db.collection<UserRecord>("users").findOne({ email });
+  const user = await db.collection<UserRecord>("users").findOne({ username });
   if (!user || !passwordsMatch(input.password, user.salt, user.passwordHash)) {
     hashPassword(input.password, user?.salt || "missing-account");
-    throw new Error("Email or password is wrong.");
+    throw new Error("Username or password is wrong.");
   }
   await startSession(user._id);
   return publicUser(user);

@@ -8,7 +8,7 @@ export default async function LoginPage() {
     <AuthForm
       mode="login"
       title="Log in"
-      subtitle="Open the workspace saved to your account."
+      subtitle="Demo login: username admin, password admin."
       alternate={{ href: "/signup", label: "Create an account" }}
     />
   );

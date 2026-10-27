@@ -131,7 +131,6 @@ export default async function HomePage() {
             <ul className="mt-4 grid gap-3 text-sm text-slate-300">
               <li className="rounded-2xl bg-white/5 px-4 py-3">Which policy is covered, partial, or missing</li>
               <li className="rounded-2xl bg-white/5 px-4 py-3">The exact change, with an owner and a due date</li>
-              <li className="rounded-2xl bg-white/5 px-4 py-3">A 30 / 60 / 90 day plan you can export</li>
             </ul>
           </div>
         </section>
