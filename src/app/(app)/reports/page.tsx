@@ -26,7 +26,7 @@ export default function ReportsPage() {
     const res = await fetch("/api/reports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ frameworks: ["cms-ma-pd"] }),
+      body: JSON.stringify({ frameworks: ["cms-ma-pd", "hipaa"] }),
     });
     const json = await res.json();
     setBusy(false);

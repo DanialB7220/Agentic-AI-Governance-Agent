@@ -21,7 +21,7 @@ export const POST = authed(async (req) => {
   if (!parsed.success) return jsonError("Invalid report payload.");
   try {
     const report = await generateStandaloneReport(
-      parsed.data.frameworks ?? ["cms-ma-pd"],
+      parsed.data.frameworks ?? ["cms-ma-pd", "hipaa"],
     );
     return Response.json({ report });
   } catch (err) {

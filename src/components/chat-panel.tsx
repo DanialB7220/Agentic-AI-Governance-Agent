@@ -29,6 +29,11 @@ const STARTERS = [
     prompt:
       "Given our org snapshot and the ingested CMS final rule, what should market access, hub, and MLR do this quarter to stay compliant? Not a full TLC program.",
   },
+  {
+    title: "HIPAA vs our hub policies",
+    prompt:
+      "Run a HIPAA readiness gap report against our current policies. Focus Privacy Rule minimum necessary, Security Rule ePHI access and encryption, business associate agreements, breach notification, and workforce training.",
+  },
 ];
 
 type Message = {

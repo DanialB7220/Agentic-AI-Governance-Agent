@@ -22,7 +22,7 @@ import type {
 } from "./types";
 
 const AUDIT_RE =
-  /\b(report|audit|gap|implement|roadmap|readiness|soc\s*2|pci|gdpr|nist|keep up|what to do|cms|medicare|part d|manufacturer discount)\b/i;
+  /\b(report|audit|gap|implement|roadmap|readiness|soc\s*2|pci|gdpr|nist|hipaa|phi|ephi|keep up|what to do|cms|medicare|part d|manufacturer discount)\b/i;
 
 export async function* runCopilot(input: {
   messages: { role: "user" | "assistant"; content: string }[];
@@ -432,12 +432,15 @@ function inferFrameworks(query: string, org: FrameworkId[]): FrameworkId[] {
   const hit: FrameworkId[] = [];
   if (/\bcms|medicare|part d|manufacturer discount|ssbci|star ratings\b/i.test(query))
     hit.push("cms-ma-pd");
+  if (/\bhipaa|ephi|\bphi\b|business associate|baa|ocr\b|breach notification\b/i.test(query))
+    hit.push("hipaa");
   if (/\bsoc\b/i.test(query)) hit.push("soc2");
   if (/\bpci\b/i.test(query)) hit.push("pci-dss");
-  if (/\bgdpr|privacy\b/i.test(query)) hit.push("gdpr");
+  if (/\bgdpr\b/i.test(query)) hit.push("gdpr");
+  if (/\bprivacy\b/i.test(query) && !hit.includes("hipaa")) hit.push("gdpr");
   if (/\bnist\b/i.test(query)) hit.push("nist-csf");
   const unique = [...new Set(hit.length ? hit : org)];
-  return unique.length ? unique : ["cms-ma-pd"];
+  return unique.length ? unique : ["cms-ma-pd", "hipaa"];
 }
 
 function inferPolicyRefs(

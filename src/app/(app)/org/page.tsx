@@ -11,6 +11,7 @@ import {
 
 const ALL_FRAMEWORKS: FrameworkId[] = [
   "cms-ma-pd",
+  "hipaa",
   "soc2",
   "pci-dss",
   "gdpr",

@@ -5,13 +5,13 @@ export const seedOrg: OrgProfile = {
   industry: "Healthcare company (Part D)",
   size: "Enterprise",
   jurisdictions: ["United States", "EU", "global affiliates"],
-  frameworks: ["cms-ma-pd", "soc2"],
+  frameworks: ["cms-ma-pd", "hipaa", "soc2"],
   scanAgencies: [
     "centers-for-medicare-medicaid-services",
     "health-and-human-services-department",
     "federal-trade-commission",
   ],
-  scanKeywords: ["Medicare", "Part D"],
+  scanKeywords: ["Medicare", "Part D", "HIPAA"],
   notes:
     "Demo tenant: map CMS-4208-F3 / CMS-4212-F (CY2027 MA/Part D final rule, 91 FR 17384) onto a healthcare company's patient-support, medical-legal-regulatory, and market-access workflows. The company is not an MA organization. Primary exposure is the Manufacturer Discount Program, selected-drug / MFP interactions, insulin and vaccine cost-sharing rules, TrOOP, and any MA/Part D marketing or plan-partner programs. Seed policies below are stand-ins, not a real company's SOPs.",
   updatedAt: new Date().toISOString(),
@@ -23,13 +23,13 @@ export const blankOrg: OrgProfile = {
   industry: "",
   size: "",
   jurisdictions: [],
-  frameworks: ["cms-ma-pd"],
+  frameworks: ["cms-ma-pd", "hipaa"],
   scanAgencies: [
     "centers-for-medicare-medicaid-services",
     "health-and-human-services-department",
     "federal-trade-commission",
   ],
-  scanKeywords: [],
+  scanKeywords: ["HIPAA", "Medicare", "Part D"],
   notes: "",
   updatedAt: new Date().toISOString(),
 };
@@ -126,7 +126,13 @@ Known gap: this SOP has not been rewritten for 42 CFR 423 subpart AA or the thre
 - TrOOP: hub does not advise patients on what counts toward the OOP threshold after IRA redesign.
 - Selected drugs: no flag in the hub CRM when a product enters a Medicare negotiation price-applicability period.
 
-Access control: hub vendors are on SSO with MFA. Quarterly access reviews exist. Least privilege is documented.`,
+HIPAA / PHI (partial stand-in):
+- Hub cases that include health information are treated as protected health information (PHI / ePHI) when the hub acts for a covered entity or as a business associate.
+- Notice of privacy practices is linked from the hub intake; minimum necessary is written into scripts but not enforced in the CRM field list.
+- Vendors that see PHI need a signed business associate agreement (BAA) before go-live — checklist exists; exceptions are still approved by email.
+- No dedicated HIPAA breach notification decision tree in this SOP (incident ticket only).
+
+Access control: hub vendors are on SSO with MFA. Quarterly access reviews exist. Least privilege is documented. Role-based unique user IDs are required.`,
   },
   {
     id: "doc_demo_access",
@@ -138,8 +144,10 @@ Access control: hub vendors are on SSO with MFA. Quarterly access reviews exist.
     text: `Enterprise access control (demo stand-in)
 
 - Workforce access via SSO and MFA.
-- Joiner-mover-leaver through identity governance. Quarterly access reviews for finance and hub systems that touch PDE and manufacturer discount files.
+- Joiner-mover-leaver through identity governance. Quarterly access reviews for finance and hub systems that touch PDE, manufacturer discount files, and ePHI.
+- Systems that store ePHI use encryption at rest and TLS in transit. Residual-risk analyses are required when encryption is not used.
 - Vendor access for rebate processors is standing, not just-in-time.
-- Change management: SAP transport requests require dual approval.`,
+- Change management: SAP transport requests require dual approval.
+- Annual security awareness training exists; dedicated HIPAA privacy/security training for PHI handlers is not yet tracked in this SOP.`,
   },
 ];

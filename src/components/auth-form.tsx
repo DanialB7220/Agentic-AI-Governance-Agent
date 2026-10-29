@@ -4,6 +4,10 @@ import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { Shield } from "lucide-react";
 
+function homeFor(workspace?: "seeded" | "blank") {
+  return workspace === "blank" ? "/onboarding" : "/copilot";
+}
+
 export function AuthForm({
   mode,
   title,
@@ -22,12 +26,16 @@ export function AuthForm({
     event.preventDefault();
     if (busy) return;
     setError("");
-    setBusy(true);
     const form = new FormData(event.currentTarget);
-    const payload = {
-      username: String(form.get("username") || ""),
-      password: String(form.get("password") || ""),
-    };
+    const username = String(form.get("username") || "");
+    const password = String(form.get("password") || "");
+    const confirm = String(form.get("confirm") || "");
+    if (mode === "signup" && password !== confirm) {
+      setError("Passwords do not match.");
+      return;
+    }
+    setBusy(true);
+    const payload = { username, password };
     try {
       const res = await fetch(mode === "login" ? "/api/auth/login" : "/api/auth/signup", {
         method: "POST",
@@ -43,9 +51,7 @@ export function AuthForm({
         setBusy(false);
         return;
       }
-      window.location.assign(
-        json.user?.workspace === "blank" ? "/org" : "/copilot",
-      );
+      window.location.assign(homeFor(json.user?.workspace));
     } catch {
       setError("Could not reach the server.");
       setBusy(false);
@@ -70,8 +76,13 @@ export function AuthForm({
               name="username"
               type="text"
               required
+              minLength={3}
+              maxLength={40}
+              pattern="[A-Za-z0-9._\-]+"
+              title="3–40 letters, numbers, dots, underscores, or hyphens"
               autoComplete="username"
               className="input"
+              placeholder={mode === "signup" ? "your.company" : undefined}
               defaultValue={mode === "login" ? "admin" : undefined}
             />
           </label>
@@ -87,6 +98,19 @@ export function AuthForm({
               defaultValue={mode === "login" ? "admin" : undefined}
             />
           </label>
+          {mode === "signup" ? (
+            <label className="grid gap-1 text-sm">
+              <span className="text-slate-300">Confirm password</span>
+              <input
+                name="confirm"
+                type="password"
+                required
+                minLength={1}
+                autoComplete="new-password"
+                className="input"
+              />
+            </label>
+          ) : null}
           {error ? <p className="text-sm text-rose-300">{error}</p> : null}
           <button
             type="submit"
@@ -96,6 +120,13 @@ export function AuthForm({
             {busy ? "Please wait…" : title}
           </button>
         </form>
+        {mode === "signup" ? (
+          <p className="mt-4 text-xs leading-5 text-slate-500">
+            New accounts start empty. You can name the org, then click{" "}
+            <span className="text-slate-300">Add sample regulations</span> on
+            onboarding.
+          </p>
+        ) : null}
         <p className="mt-4 text-sm text-slate-400">
           <Link href={alternate.href} className="text-amber-300 hover:text-amber-200">
             {alternate.label}

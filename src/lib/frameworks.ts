@@ -15,6 +15,7 @@ export const FRAMEWORK_LABEL: Record<FrameworkId, string> = {
   gdpr: "GDPR",
   "nist-csf": "NIST CSF",
   "cms-ma-pd": "CMS MA / Part D (CY2027)",
+  hipaa: "HIPAA",
 };
 
 export const CONTROLS: ControlDef[] = [
@@ -245,6 +246,112 @@ export const CONTROLS: ControlDef[] = [
       "Anomalies and events are discovered in time to contain impact.",
     keywords: ["detect", "siem", "alert", "anomaly"],
     action: "Define detection use cases for admin abuse and data exfil.",
+  },
+  {
+    id: "hipaa-privacy-min",
+    framework: "hipaa",
+    title: "Privacy Rule — minimum necessary / uses & disclosures",
+    requirement:
+      "Limit uses and disclosures of protected health information (PHI) to the minimum necessary for the purpose, with a written notice of privacy practices when acting as a covered entity or business associate.",
+    keywords: [
+      "hipaa",
+      "phi",
+      "ephi",
+      "minimum necessary",
+      "privacy practices",
+      "protected health",
+      "disclosure",
+    ],
+    action:
+      "Map every hub / vendor data flow that touches PHI, document the purpose, and enforce minimum-necessary access in scripts and systems.",
+  },
+  {
+    id: "hipaa-security-access",
+    framework: "hipaa",
+    title: "Security Rule — access control for ePHI",
+    requirement:
+      "Unique user IDs, emergency access, automatic logoff, and encryption/decryption procedures for electronic PHI; workforce access is role-based and reviewed.",
+    keywords: [
+      "ephi",
+      "access control",
+      "unique user",
+      "role-based",
+      "mfa",
+      "single sign-on",
+      "access review",
+    ],
+    action:
+      "Require SSO + MFA for every system that stores or displays ePHI, and calendar periodic access reviews for hub and vendor staff.",
+  },
+  {
+    id: "hipaa-security-encrypt",
+    framework: "hipaa",
+    title: "Security Rule — encryption & transmission security",
+    requirement:
+      "Protect ePHI at rest and in transit; where encryption is not used, document a written residual-risk analysis and compensating controls.",
+    keywords: [
+      "encryption",
+      "tls",
+      "at rest",
+      "in transit",
+      "ephi",
+      "residual-risk",
+      "safe harbor",
+    ],
+    action:
+      "Inventory ePHI stores and confirm encryption at rest/in transit; write residual-risk analyses only where encryption truly cannot be used.",
+  },
+  {
+    id: "hipaa-baa",
+    framework: "hipaa",
+    title: "Business associate agreements",
+    requirement:
+      "Vendors that create, receive, maintain, or transmit PHI on behalf of the company must have a signed BAA before PHI is shared, with permitted uses and breach duties.",
+    keywords: [
+      "business associate",
+      "baa",
+      "vendor",
+      "phi",
+      "subcontractor",
+      "hipaa",
+    ],
+    action:
+      "Gate PHI-sharing integrations behind a signed BAA checklist and refuse go-live when the agreement is missing or stale.",
+  },
+  {
+    id: "hipaa-breach",
+    framework: "hipaa",
+    title: "Breach notification readiness",
+    requirement:
+      "Investigate suspected breaches of unsecured PHI, document the risk assessment, and notify affected individuals / HHS / media on the statutory clocks when a breach is confirmed.",
+    keywords: [
+      "breach",
+      "breach notification",
+      "unsecured phi",
+      "risk assessment",
+      "hhs",
+      "ocr",
+      "incident",
+    ],
+    action:
+      "Add a HIPAA breach decision tree to the incident runbook with owners, clocks, and evidence retention.",
+  },
+  {
+    id: "hipaa-training",
+    framework: "hipaa",
+    title: "Workforce HIPAA training & sanctions",
+    requirement:
+      "Train workforce members who handle PHI on privacy and security policies; apply and document sanctions for violations.",
+    keywords: [
+      "hipaa training",
+      "workforce",
+      "sanctions",
+      "privacy training",
+      "security awareness",
+      "phi",
+    ],
+    action:
+      "Enroll hub, vendor, and support staff in annual HIPAA privacy/security training and keep completion evidence on file.",
   },
 ];
 

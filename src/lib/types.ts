@@ -4,6 +4,7 @@ export const FRAMEWORKS = [
   "gdpr",
   "nist-csf",
   "cms-ma-pd",
+  "hipaa",
 ] as const;
 export type FrameworkId = (typeof FRAMEWORKS)[number];
 

@@ -35,6 +35,40 @@ export default function RiskPage() {
         Latest audit, open high gaps, and rules saved in the last seven days.
       </p>
 
+      <section className="glass mt-6 rounded-2xl p-4 text-sm leading-6 text-slate-300">
+        <h2 className="text-sm font-semibold text-amber-200">How risk is calculated</h2>
+        <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-slate-400">
+          <li>
+            Auditor scores each in-scope control (CMS MA/Part D, HIPAA, SOC 2, …)
+            by searching your org notes and policies for that control’s keywords.
+          </li>
+          <li>
+            Status: <span className="text-slate-200">covered</span> if enough
+            keywords match (≥ ~45%), <span className="text-slate-200">partial</span>{" "}
+            if some match, <span className="text-slate-200">missing</span> if none.
+          </li>
+          <li>
+            Risk level from status: missing →{" "}
+            <span className="text-rose-200">high</span>, partial →{" "}
+            <span className="text-amber-200">medium</span>, covered →{" "}
+            <span className="text-emerald-200">low</span>.
+          </li>
+          <li>
+            <span className="text-slate-200">Coverage %</span> = share of scored
+            controls that are covered on the latest report.
+          </li>
+          <li>
+            This page shows that coverage, open high gaps from the latest report,
+            open policy changes across reports, and regulations saved in the last
+            7 days — plus the last Federal Register scan time.
+          </li>
+        </ol>
+        <p className="mt-3 text-xs text-slate-500">
+          Heuristic readiness signal for internal planning — not a HIPAA/CMS
+          attestation or legal opinion.
+        </p>
+      </section>
+
       <div className="mt-8 grid gap-3 sm:grid-cols-3">
         <Stat
           label="Latest coverage"

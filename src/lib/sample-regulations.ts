@@ -72,7 +72,7 @@ Co-promote and medical-affairs speaker programs are in scope even when a third-p
     publishedAt: "2026-03-01",
     text: `${NOTICE}
 
-A patient support hub that receives health information to check coverage, route copay support, or enroll a patient in assistance is expected to treat that information as protected health information when it is acting for a covered entity or as a business associate.
+A patient support hub that receives health information to check coverage, route copay support, or enroll a patient in assistance is expected to treat that information as protected health information (PHI / ePHI) under HIPAA when it is acting for a covered entity or as a business associate.
 
 The assumed operating rules are:
 - Part D patients are not offered a commercial copay card.
@@ -80,7 +80,28 @@ The assumed operating rules are:
 - Adult vaccines that are Part D drugs have a $0 cost-sharing talking track when they are ACIP-recommended.
 - The hub can tell whether a product is in a Medicare price-applicability period before it quotes support.
 - Vendor staff who can see these cases use single sign-on and multi-factor authentication, and access is reviewed on a set schedule.
-- A written notice explains what the hub collects, why, and which vendors receive it.`,
+- A written notice of privacy practices explains what the hub collects, why, and which vendors receive it, and PHI uses follow the minimum necessary standard.
+- Vendors that create, receive, maintain, or transmit PHI have a signed business associate agreement (BAA) before go-live.`,
+  },
+  {
+    id: "sample_hipaa_security",
+    title: "Sample: HIPAA Security Rule — ePHI access, encryption, breach clocks",
+    abstract:
+      "Assumed HIPAA Security Rule and breach-notification duties for systems that store or transmit electronic protected health information.",
+    publishedAt: "2026-08-21",
+    text: `${NOTICE}
+
+A healthcare company that creates, receives, maintains, or transmits electronic protected health information (ePHI) is expected to implement administrative, physical, and technical safeguards consistent with the HIPAA Security Rule, whether it is a covered entity or a business associate.
+
+The assumed control standard is:
+- Unique user IDs, role-based access control, multi-factor authentication, and automatic logoff for systems that display ePHI.
+- Encryption of ePHI at rest and in transit (TLS). Where encryption is not used, a written residual-risk analysis and compensating controls are on file.
+- Workforce HIPAA privacy and security training on a set schedule, with documented sanctions for violations.
+- Signed business associate agreements before PHI is shared with vendors or subcontractors.
+- A breach notification runbook: investigate suspected breaches of unsecured PHI, document the risk assessment, and notify individuals / HHS OCR / media on the statutory clocks when a breach is confirmed.
+- Audit logs for ePHI access are retained and reviewed for anomalies.
+
+This sample is a planning assumption for internal readiness work. It is not official OCR guidance and is not a legal opinion.`,
   },
   {
     id: "sample_dscsa",

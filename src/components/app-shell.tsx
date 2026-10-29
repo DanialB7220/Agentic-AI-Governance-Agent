@@ -11,10 +11,11 @@ import {
   MessageSquare,
   ScrollText,
   Shield,
+  Sparkles,
 } from "lucide-react";
 import { OnboardingBanner } from "@/components/onboarding-banner";
 
-const NAV = [
+const BASE_NAV = [
   { href: "/copilot", label: "Copilot", icon: MessageSquare },
   { href: "/regulations", label: "Regulations", icon: BookOpen },
   { href: "/org", label: "Organization", icon: Building2 },
@@ -39,6 +40,13 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [health, setHealth] = useState<Health | null>(null);
+  const NAV =
+    user.workspace === "blank"
+      ? [
+          { href: "/onboarding", label: "Setup", icon: Sparkles },
+          ...BASE_NAV,
+        ]
+      : BASE_NAV;
 
   useEffect(() => {
     fetch("/api/health")

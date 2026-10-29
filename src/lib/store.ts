@@ -287,7 +287,13 @@ export async function loadStore(): Promise<StoreShape> {
       state = freshState("blank");
       dirty = true;
     } else if (mode === "seeded") {
-      if (scrubMemory(state) || ensureBuiltInSamples(state)) dirty = true;
+      if (
+        scrubMemory(state) ||
+        ensureBuiltInSamples(state) ||
+        ensureHipaaFramework(state)
+      ) {
+        dirty = true;
+      }
     } else if (scrubMemoryBlank(state)) {
       dirty = true;
     }
@@ -306,7 +312,7 @@ function looksLikeAccidentalSeed(state: StoreShape) {
   );
 }
 
-/** Install the five built-in sample regulations (onboarding / blank workspaces). */
+/** Install the built-in sample regulations (onboarding / blank workspaces). */
 export async function installSampleRegulations() {
   return edit((state) => {
     const changed = ensureBuiltInSamples(state);
@@ -433,17 +439,37 @@ function scrubMemoryBlank(state: StoreShape) {
   return true;
 }
 
+/** Seeded healthcare demos always include HIPAA in-scope. */
+function ensureHipaaFramework(state: StoreShape) {
+  if (state.org.frameworks.includes("hipaa")) return false;
+  state.org.frameworks = [...state.org.frameworks, "hipaa"];
+  return true;
+}
+
+function sampleFramework(sampleId: string): StoredDocument["framework"] {
+  if (sampleId.includes("hipaa")) return "hipaa";
+  if (sampleId.includes("hub_privacy")) return "hipaa";
+  return "cms-ma-pd";
+}
+
 function ensureBuiltInSamples(state: StoreShape) {
   let changed = false;
   for (const sample of SAMPLE_REGULATIONS) {
     const existing = state.documents.find((doc) => doc.id === sample.id);
-    if (existing?.text === sample.text && existing.title === sample.title) continue;
+    const framework = sampleFramework(sample.id);
+    if (
+      existing?.text === sample.text &&
+      existing.title === sample.title &&
+      existing.framework === framework
+    ) {
+      continue;
+    }
     const doc: StoredDocument = {
       id: sample.id,
       title: sample.title,
       kind: "regulation",
       source: "seed",
-      framework: "cms-ma-pd",
+      framework,
       publishedAt: sample.publishedAt,
       createdAt: existing?.createdAt ?? `${sample.publishedAt}T00:00:00.000Z`,
       text: sample.text,

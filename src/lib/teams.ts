@@ -27,7 +27,13 @@ export function inferTeam(text: string, framework?: FrameworkId): TeamName {
     return "Market access";
   }
   if (/financ|accrual|sap|close checklist/.test(hay)) return "Finance";
-  if (/privacy|gdpr|hipaa|pii|dsr|breach/.test(hay) || framework === "gdpr") return "Privacy";
+  if (
+    /privacy|gdpr|hipaa|pii|phi|ephi|dsr|baa|business associate|breach/.test(hay) ||
+    framework === "gdpr" ||
+    framework === "hipaa"
+  ) {
+    return "Privacy";
+  }
   if (/access control|mfa|soc|pci|encrypt|vulnerab|nist|security|log(ging)?/.test(hay) ||
     framework === "soc2" ||
     framework === "pci-dss" ||

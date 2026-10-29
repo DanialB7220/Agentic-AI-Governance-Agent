@@ -131,11 +131,21 @@ export function OnboardingBanner() {
                 : "Build your org from scratch"}
             </h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-400">
-              This login starts empty on purpose. Set the company snapshot, add
-              policies, then bring regulations in — or load samples in one click.
+              This login starts empty on purpose. Use{" "}
+              <Link href="/onboarding" className="text-amber-300 hover:text-amber-200">
+                Setup
+              </Link>{" "}
+              to name the company, add policies, then bring regulations in — or
+              load samples in one click.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Link
+              href="/onboarding"
+              className="inline-flex h-9 items-center rounded-full border border-white/15 px-3 text-xs text-slate-200 hover:bg-white/5"
+            >
+              Open setup
+            </Link>
             <button
               type="button"
               disabled={busy !== ""}
