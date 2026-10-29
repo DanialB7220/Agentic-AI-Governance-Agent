@@ -1,8 +1,9 @@
 # Governance Agent — 10-Minute Hackathon Pitch
 
 **Target runtime:** 10 minutes talk (+ optional 1–2 min live click if time allows)  
-**Focus:** Business first → product → agents → architecture/tech → why we win  
-**Login for demo:** `admin` / `admin` (seeded) · `admin1` / `admin1` (empty onboarding) · http://localhost:3000
+**Focus:** Business first → product → agents → architecture/tech → close  
+**Login for demo:** `admin` / `admin` (seeded) · `admin1` / `admin1` (empty onboarding) · http://localhost:3000  
+**Live deploy today:** Render · **Roadmap:** AWS (hosting + data) + Bedrock for models/RAG
 
 **Timing guide (stick to this)**
 
@@ -12,9 +13,9 @@
 | 0:45–2:30 | 2–3 | Business problem + who pays |
 | 2:30–4:30 | 4–5 | Value prop + product overview |
 | 4:30–6:00 | 6 | Agents + live process (RAG → OpenAI → Mongo) |
-| 6:00–7:30 | 7–8 | Architecture path + stack mapped to process |
-| 7:30–9:00 | 9 | Demo / proof (or screenshots) |
-| 9:00–10:00 | 10–11 | Why we win + close |
+| 6:00–7:30 | 7–8 | Architecture + stack (Render now → AWS/Bedrock next) |
+| 7:30–9:15 | 9 | Demo / proof (or screenshots) |
+| 9:15–10:00 | 10 | Close |
 
 **Honesty line (say once):** Internal readiness copilot. Not a CMS filing tool. Not legal advice. Sample rules and SOPs are demo stand-ins.
 
@@ -243,8 +244,16 @@ Every policy, chunk, report, chat, and activity row is keyed by `userId`. Two lo
 **RAG design choice**  
 No separate vector DB for this build. Embeddings sit **on the chunk documents in MongoDB**. Same store as the text — simpler ops story for a pilot.
 
-**Enterprise swap later (one sentence)**  
-Same product shape: Azure OpenAI (or Bedrock) instead of public OpenAI — APIs stay behind the same Next.js routes.
+### Deploy today → AWS next (say this)
+
+| Layer | Today (shipped) | Where we want to go |
+| --- | --- | --- |
+| App host | **Render** (Next.js live) | **AWS** (e.g. ECS / App Runner / Amplify) |
+| Database | **MongoDB Atlas** | Stay Mongo-compatible on AWS **or** move data plane into the AWS account (tighter VPC / compliance) |
+| Models / RAG | **OpenAI** chat + embeddings | **Amazon Bedrock** — Titan embeddings + optional Knowledge Base (SDK already wired in the repo) |
+
+**Say**  
+“This is not a laptop demo — it is deployed on Render. The next step we want is AWS for hosting and data, and Bedrock for the model/RAG path so enterprise traffic stays in one cloud.”
 
 ---
 
@@ -252,35 +261,37 @@ Same product shape: Azure OpenAI (or Bedrock) instead of public OpenAI — APIs 
 
 ## Stack mapped to the process (not a laundry list)
 
-### 1) App shell
+### 1) App shell + deploy
 | Piece | Tech | Why it matters in the pitch |
 | --- | --- | --- |
 | Framework | **Next.js 16** App Router | UI + API + agents in one deployable app |
 | UI | **React 19**, **Tailwind 4** | Working workspace (Copilot, Regs, Org, Reports…) |
 | Language | **TypeScript** + **Zod** | Typed routes and validated payloads |
+| Hosting **now** | **Render** | Live URL judges can hit — not “works on my machine” |
+| Hosting **next** | **AWS** | Enterprise preference; same Next.js app, different host |
 
 ### 2) Intelligence path
-| Step | Tech | What happens |
+| Step | Tech **today** | Roadmap |
 | --- | --- | --- |
-| Embed on ingest | **OpenAI Embeddings API** (`text-embedding-3-small`) | Each ~900-char chunk gets a vector stored in Mongo |
-| Retrieve | Local cosine + keyword over **MongoDB chunks** | Grounds Scout — not a separate vector DB |
-| Scout + Auditor | **OpenAI Chat API** (`gpt-4o` via `openai` SDK) | **2 agents**; full memo = Scout + Auditor draft + rewrite |
-| Control packs | Built-in CMS MA/Part D, SOC 2, PCI, GDPR, NIST | Deterministic scoring inside Auditor before narrative |
+| Embed on ingest | **OpenAI** `text-embedding-3-small` → vectors on Mongo chunks | **Bedrock Titan** embeddings (+ optional Knowledge Base) |
+| Retrieve | Local cosine + keyword over **MongoDB chunks** | Same product shape; Bedrock KB can merge in when configured |
+| Scout + Auditor | **OpenAI Chat API** (`gpt-4o`) | Keep agents; swap provider behind the same routes (Bedrock / Azure) |
+| Control packs | CMS MA/Part D, SOC 2, PCI, GDPR, NIST | Unchanged — scoring stays in our code |
 
 ### 3) Data, auth, feeds, files
 | Piece | Tech | What happens |
 | --- | --- | --- |
-| Persistence | **MongoDB Atlas** (`governance` DB) | users, sessions, per-user org/docs/chunks/reports/meta |
+| Persistence **now** | **MongoDB Atlas** (`governance` DB) | users, sessions, per-user org/docs/chunks/reports/meta |
+| Persistence **next** | AWS-aligned data plane | Same schemas; move closer to the AWS account for compliance |
 | Auth | Username/password, **salted SHA-256**, httpOnly cookie | Real login isolation for demos (`admin` / `admin1`) |
 | Rule feed | **Federal Register HTTP API** | Scanner + Regulations page filter by agencies/keywords |
-| PDF in | **unpdf** | Extract text from uploaded PDFs into ingest |
-| PDF out | **pdf-lib** | Export policy-suggestion memo from a report |
+| PDF in / out | **unpdf** / **pdf-lib** | Ingest PDFs · export policy-suggestion memo |
 
 ### 4) How a document becomes usable (10-second process)
-Upload/paste → API ingest → text chunked (~900 / ~140 overlap) → OpenAI embedding written onto each chunk in MongoDB → available to the next Scout run.
+Upload/paste → API ingest → text chunked (~900 / ~140 overlap) → embedding written onto each chunk in MongoDB → available to the next Scout run.
 
 **Say**  
-“Next.js runs the product. OpenAI powers embeddings and both agents. MongoDB holds the isolated brain. Federal Register keeps the watchlist alive. That is the whole critical path.”
+“Next.js on Render today. OpenAI + MongoDB power the brain. The path we want next is AWS hosting and data, with Bedrock for embeddings and RAG — the agent product stays the same.”
 
 ---
 
@@ -309,26 +320,7 @@ Still sell the outcome: owned change list in minutes. Name the stack verbally (O
 
 ---
 
-# SLIDE 10 — Why we win (9:00–9:40)
-
-## Judging lens → our answer
-
-| They look for | We show |
-| --- | --- |
-| Clear problem | Delay between rule drop and owned remediation |
-| Business value | Speed, accountability, meeting-ready memos |
-| Technical depth | Scout/Auditor on gpt-4o, embeddings RAG in MongoDB, FR scanner, real auth |
-| Working demo | Full workspace, not mock screens |
-| Differentiation | Team-level RACI-style action items on gaps |
-| Feasibility | Runs today; Azure/Bedrock path without rewrite |
-| Trust | Explicit about filings / legal / sample limits |
-
-**What makes us memorable**  
-Not “another chatbot.” A **governance operating layer** that turns regulation into assigned work.
-
----
-
-# SLIDE 11 — Close (9:40–10:00)
+# SLIDE 10 — Close (9:15–10:00)
 
 ## Closing line (memorize)
 
@@ -338,6 +330,9 @@ Not “another chatbot.” A **governance operating layer** that turns regulatio
 
 **Call to action**  
 Pilot with one Market Access + Governance pair on CMS MA/Part D. Measure time from rule ingested → first signed internal memo with owners.
+
+**Optional one-liner on platform**  
+“Live on Render today; next we want AWS + Bedrock so the same agents run in the customer’s preferred cloud.”
 
 **Thank you — questions**
 
@@ -351,7 +346,8 @@ Pilot with one Market Access + Governance pair on CMS MA/Part D. Measure time fr
 - Product SKU = owned readiness memo  
 - Agents = **2 LLM** (Scout + Auditor on **gpt-4o**) + **1 non-LLM** Federal Register Scanner  
 - Process = ingest → embed → RAG retrieve → Scout → (optional) Auditor → Mongo report  
-- Stack = Next.js, **MongoDB Atlas** (chunks + vectors), **OpenAI** chat + embeddings, **Federal Register API**  
+- Stack **now** = Next.js on **Render**, **MongoDB Atlas**, **OpenAI**, Federal Register  
+- Stack **next** = **AWS** hosting/data + **Bedrock** for embeddings / RAG  
 - Honest limits = no CMS filing, no legal opinion  
 
 **Must not say**
@@ -360,10 +356,11 @@ Pilot with one Market Access + Governance pair on CMS MA/Part D. Measure time fr
 - “Samples are official government text”  
 - “This is a validated QMS”  
 - “We use Pinecone” (we don’t — vectors are on MongoDB chunks)  
-- “Three LLM agents” (Scanner is not an LLM)
+- “Three LLM agents” (Scanner is not an LLM)  
+- “We’re already on Bedrock in production” (OpenAI + Mongo on Render today; Bedrock is the roadmap — SDK is ready)
 
 **60-second emergency version**  
-“Healthcare manufacturers get hit by Part D and CMS changes that force Market Access, Finance, MLR, and Engineering to move together. Governance Agent runs on Next.js with per-account data in MongoDB Atlas. Policies are chunked and embedded with OpenAI text-embedding-3-small. Local RAG retrieves those chunks; Scout analyzes with gpt-4o; Auditor writes the readiness memo with team action items, owners, and due dates. A separate non-LLM scanner polls the Federal Register every four hours. Two LLM agents, one watcher. We don’t file with CMS — we kill the week of confusion after the rule drops.”
+“Healthcare manufacturers get hit by Part D and CMS changes that force Market Access, Finance, MLR, and Engineering to move together. Governance Agent is live on Render: Next.js, MongoDB Atlas, OpenAI embeddings and gpt-4o for Scout and Auditor. Local RAG retrieves company SOP chunks; Auditor writes the readiness memo with team owners and due dates. A non-LLM scanner polls the Federal Register. Next we want AWS for hosting and data, and Bedrock for the model/RAG path. We don’t file with CMS — we kill the week of confusion after the rule drops.”
 
 ---
 
@@ -375,13 +372,11 @@ Pilot with one Market Access + Governance pair on CMS MA/Part D. Measure time fr
 4. Business proposition  
 5. Product overview  
 6. Agents: 2 LLM (Scout, Auditor) + Scanner  
-
-7. Architecture: where each API call goes  
-8. Technologies mapped to the process  
+7. Architecture: where each API call goes (+ Render → AWS)  
+8. Technologies mapped to the process (+ Bedrock roadmap)  
 9. Proof / demo  
-10. Why we win  
-11. Close  
+10. Close  
 
 ---
 
-*10 minutes. Lead with money and pain. Prove with the real process (OpenAI + MongoDB + agents). Close on owned work, not “AI.”*
+*10 minutes. Lead with money and pain. Prove with the real process. Close on owned work — and Render today → AWS/Bedrock next.*
