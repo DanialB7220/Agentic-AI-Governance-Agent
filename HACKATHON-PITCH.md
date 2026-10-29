@@ -3,7 +3,7 @@
 **Target runtime:** 10 minutes talk (+ optional 1–2 min live click if time allows)  
 **Focus:** Business first → product → agents → architecture/tech → close  
 **Login for demo:** `admin` / `admin` (seeded) · `admin1` / `admin1` (empty onboarding) · http://localhost:3000  
-**Live deploy today:** Render · **Roadmap:** AWS (hosting + data) + Bedrock for models/RAG
+**Live deploy today:** Render · **DB today:** MongoDB Atlas (working — keep it) · **Roadmap:** Amazon Bedrock for models / RAG
 
 **Timing guide (stick to this)**
 
@@ -13,7 +13,7 @@
 | 0:45–2:30 | 2–3 | Business problem + who pays |
 | 2:30–4:30 | 4–5 | Value prop + product overview |
 | 4:30–6:00 | 6 | Agents + live process (RAG → OpenAI → Mongo) |
-| 6:00–7:30 | 7–8 | Architecture + stack (Render now → AWS/Bedrock next) |
+| 6:00–7:30 | 7–8 | Architecture + stack (Render + Mongo now → Bedrock next) |
 | 7:30–9:15 | 9 | Demo / proof (or screenshots) |
 | 9:15–10:00 | 10 | Close |
 
@@ -244,16 +244,16 @@ Every policy, chunk, report, chat, and activity row is keyed by `userId`. Two lo
 **RAG design choice**  
 No separate vector DB for this build. Embeddings sit **on the chunk documents in MongoDB**. Same store as the text — simpler ops story for a pilot.
 
-### Deploy today → AWS next (say this)
+### Deploy + roadmap (say this)
 
-| Layer | Today (shipped) | Where we want to go |
+| Layer | Today (shipped) | Future |
 | --- | --- | --- |
-| App host | **Render** (Next.js live) | **AWS** (e.g. ECS / App Runner / Amplify) |
-| Database | **MongoDB Atlas** | Stay Mongo-compatible on AWS **or** move data plane into the AWS account (tighter VPC / compliance) |
-| Models / RAG | **OpenAI** chat + embeddings | **Amazon Bedrock** — Titan embeddings + optional Knowledge Base (SDK already wired in the repo) |
+| App host | **Render** (Next.js live) | Same app; host wherever the customer wants |
+| Database | **MongoDB Atlas** — working; keeps org/docs/chunks/reports | **Keep MongoDB** — no need to rip it out |
+| Models / RAG | **OpenAI** chat (`gpt-4o`) + embeddings | **Amazon Bedrock** — Titan embeddings + optional Knowledge Base (SDK already in the repo) |
 
 **Say**  
-“This is not a laptop demo — it is deployed on Render. The next step we want is AWS for hosting and data, and Bedrock for the model/RAG path so enterprise traffic stays in one cloud.”
+“Deployed on Render. MongoDB is our database and it works. OpenAI runs Scout and Auditor today. Next we want Amazon Bedrock for the model and RAG path — agents stay the same, providers swap behind the API.”
 
 ---
 
@@ -267,22 +267,20 @@ No separate vector DB for this build. Embeddings sit **on the chunk documents in
 | Framework | **Next.js 16** App Router | UI + API + agents in one deployable app |
 | UI | **React 19**, **Tailwind 4** | Working workspace (Copilot, Regs, Org, Reports…) |
 | Language | **TypeScript** + **Zod** | Typed routes and validated payloads |
-| Hosting **now** | **Render** | Live URL judges can hit — not “works on my machine” |
-| Hosting **next** | **AWS** | Enterprise preference; same Next.js app, different host |
+| Hosting | **Render** | Live deploy — not “works on my machine” |
 
 ### 2) Intelligence path
-| Step | Tech **today** | Roadmap |
+| Step | Tech **today** | Future |
 | --- | --- | --- |
-| Embed on ingest | **OpenAI** `text-embedding-3-small` → vectors on Mongo chunks | **Bedrock Titan** embeddings (+ optional Knowledge Base) |
-| Retrieve | Local cosine + keyword over **MongoDB chunks** | Same product shape; Bedrock KB can merge in when configured |
-| Scout + Auditor | **OpenAI Chat API** (`gpt-4o`) | Keep agents; swap provider behind the same routes (Bedrock / Azure) |
+| Embed on ingest | **OpenAI** `text-embedding-3-small` → vectors on Mongo chunks | **Amazon Bedrock** Titan embeddings (+ optional Knowledge Base) |
+| Retrieve | Local cosine + keyword over **MongoDB chunks** | Same Mongo store; Bedrock KB can merge in when configured |
+| Scout + Auditor | **OpenAI Chat API** (`gpt-4o`) | Same two agents; Bedrock-ready provider swap behind the routes |
 | Control packs | CMS MA/Part D, SOC 2, PCI, GDPR, NIST | Unchanged — scoring stays in our code |
 
 ### 3) Data, auth, feeds, files
 | Piece | Tech | What happens |
 | --- | --- | --- |
-| Persistence **now** | **MongoDB Atlas** (`governance` DB) | users, sessions, per-user org/docs/chunks/reports/meta |
-| Persistence **next** | AWS-aligned data plane | Same schemas; move closer to the AWS account for compliance |
+| Persistence | **MongoDB Atlas** (`governance` DB) | users, sessions, per-user org/docs/chunks/reports/meta — **this stays** |
 | Auth | Username/password, **salted SHA-256**, httpOnly cookie | Real login isolation for demos (`admin` / `admin1`) |
 | Rule feed | **Federal Register HTTP API** | Scanner + Regulations page filter by agencies/keywords |
 | PDF in / out | **unpdf** / **pdf-lib** | Ingest PDFs · export policy-suggestion memo |
@@ -291,7 +289,7 @@ No separate vector DB for this build. Embeddings sit **on the chunk documents in
 Upload/paste → API ingest → text chunked (~900 / ~140 overlap) → embedding written onto each chunk in MongoDB → available to the next Scout run.
 
 **Say**  
-“Next.js on Render today. OpenAI + MongoDB power the brain. The path we want next is AWS hosting and data, with Bedrock for embeddings and RAG — the agent product stays the same.”
+“Next.js on Render. MongoDB holds the brain. OpenAI powers embeddings and both agents today. Future step: Amazon Bedrock for models and RAG — MongoDB stays.”
 
 ---
 
@@ -332,7 +330,7 @@ Still sell the outcome: owned change list in minutes. Name the stack verbally (O
 Pilot with one Market Access + Governance pair on CMS MA/Part D. Measure time from rule ingested → first signed internal memo with owners.
 
 **Optional one-liner on platform**  
-“Live on Render today; next we want AWS + Bedrock so the same agents run in the customer’s preferred cloud.”
+“Live on Render with MongoDB today; next we want Amazon Bedrock for models and RAG — same agents, better enterprise model path.”
 
 **Thank you — questions**
 
@@ -347,7 +345,7 @@ Pilot with one Market Access + Governance pair on CMS MA/Part D. Measure time fr
 - Agents = **2 LLM** (Scout + Auditor on **gpt-4o**) + **1 non-LLM** Federal Register Scanner  
 - Process = ingest → embed → RAG retrieve → Scout → (optional) Auditor → Mongo report  
 - Stack **now** = Next.js on **Render**, **MongoDB Atlas**, **OpenAI**, Federal Register  
-- Stack **next** = **AWS** hosting/data + **Bedrock** for embeddings / RAG  
+- Stack **next** = **Amazon Bedrock** for embeddings / RAG (MongoDB stays)  
 - Honest limits = no CMS filing, no legal opinion  
 
 **Must not say**
@@ -357,10 +355,11 @@ Pilot with one Market Access + Governance pair on CMS MA/Part D. Measure time fr
 - “This is a validated QMS”  
 - “We use Pinecone” (we don’t — vectors are on MongoDB chunks)  
 - “Three LLM agents” (Scanner is not an LLM)  
-- “We’re already on Bedrock in production” (OpenAI + Mongo on Render today; Bedrock is the roadmap — SDK is ready)
+- “We’re replacing MongoDB” (we’re not — Mongo works; Bedrock is the model/RAG upgrade)  
+- “We’re already on Bedrock in production” (OpenAI today; Bedrock is the roadmap — SDK is ready)
 
 **60-second emergency version**  
-“Healthcare manufacturers get hit by Part D and CMS changes that force Market Access, Finance, MLR, and Engineering to move together. Governance Agent is live on Render: Next.js, MongoDB Atlas, OpenAI embeddings and gpt-4o for Scout and Auditor. Local RAG retrieves company SOP chunks; Auditor writes the readiness memo with team owners and due dates. A non-LLM scanner polls the Federal Register. Next we want AWS for hosting and data, and Bedrock for the model/RAG path. We don’t file with CMS — we kill the week of confusion after the rule drops.”
+“Healthcare manufacturers get hit by Part D and CMS changes that force Market Access, Finance, MLR, and Engineering to move together. Governance Agent is live on Render: Next.js, MongoDB Atlas, OpenAI embeddings and gpt-4o for Scout and Auditor. Local RAG retrieves company SOP chunks; Auditor writes the readiness memo with team owners and due dates. A non-LLM scanner polls the Federal Register. MongoDB stays; next we want Amazon Bedrock for the model and RAG path. We don’t file with CMS — we kill the week of confusion after the rule drops.”
 
 ---
 
@@ -372,11 +371,11 @@ Pilot with one Market Access + Governance pair on CMS MA/Part D. Measure time fr
 4. Business proposition  
 5. Product overview  
 6. Agents: 2 LLM (Scout, Auditor) + Scanner  
-7. Architecture: where each API call goes (+ Render → AWS)  
+7. Architecture: where each API call goes (+ Render, Mongo, Bedrock next)  
 8. Technologies mapped to the process (+ Bedrock roadmap)  
 9. Proof / demo  
 10. Close  
 
 ---
 
-*10 minutes. Lead with money and pain. Prove with the real process. Close on owned work — and Render today → AWS/Bedrock next.*
+*10 minutes. Lead with money and pain. Prove with the real process. Close on owned work — Render + Mongo today, Bedrock next.*
