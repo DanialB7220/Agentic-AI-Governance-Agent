@@ -8,7 +8,7 @@ export default async function LoginPage() {
     <AuthForm
       mode="login"
       title="Log in"
-      subtitle="Demo login: username admin, password admin."
+      subtitle="admin / admin = seeded demo. admin1 / admin1 = empty onboarding."
       alternate={{ href: "/signup", label: "Create an account" }}
     />
   );

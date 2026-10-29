@@ -34,13 +34,18 @@ export function AuthForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const json = (await res.json()) as { error?: string };
+      const json = (await res.json()) as {
+        error?: string;
+        user?: { workspace?: "seeded" | "blank" };
+      };
       if (!res.ok) {
         setError(json.error || "Could not continue.");
         setBusy(false);
         return;
       }
-      window.location.assign("/copilot");
+      window.location.assign(
+        json.user?.workspace === "blank" ? "/org" : "/copilot",
+      );
     } catch {
       setError("Could not reach the server.");
       setBusy(false);

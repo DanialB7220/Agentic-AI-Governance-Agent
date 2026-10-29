@@ -223,11 +223,41 @@ export default function RegulationsPage() {
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Regulations</h1>
       <p className="mt-2 text-sm text-slate-400">
-        Sample regulations for a healthcare company are
-        already in the library. View one to read it. Paste or upload another
-        rule to add it. If that text is already saved, choose overwrite or add
-        it as a new regulation.
+        View sample regulations when they are in your library, or paste / upload
+        your own. If that text is already saved, choose overwrite or add it as a
+        new regulation. Empty onboarding accounts can load samples with one click.
       </p>
+      <div className="mt-4">
+        <button
+          type="button"
+          disabled={busyId !== null}
+          onClick={() => {
+            setBusyId("samples");
+            setError("");
+            setNotice("");
+            void fetch("/api/onboarding/samples", { method: "POST" })
+              .then(async (res) => {
+                const json = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                  setError(json.error || "Could not add samples.");
+                  return;
+                }
+                const docs = await fetch("/api/documents").then((r) => r.json());
+                setLibrary(docs.documents ?? []);
+                window.dispatchEvent(new Event("ga-workspace-refresh"));
+                setNotice(
+                  json.added
+                    ? "Sample regulations added. Use View below."
+                    : "Sample regulations were already in the library.",
+                );
+              })
+              .finally(() => setBusyId(null));
+          }}
+          className="h-10 cursor-pointer rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 text-sm font-medium text-amber-200 hover:bg-amber-500/20 disabled:opacity-40"
+        >
+          {busyId === "samples" ? "Adding samples…" : "Add sample regulations"}
+        </button>
+      </div>
 
       <form onSubmit={onUpload} className="glass mt-8 grid gap-3 rounded-2xl p-4">
         <p className="text-sm font-medium">Upload or paste a rule</p>
@@ -296,14 +326,17 @@ export default function RegulationsPage() {
       <section className="mt-8">
         <h2 className="text-sm font-medium text-white">Sample regulations</h2>
         <p className="mt-1 text-sm text-slate-400">
-          Built in for a healthcare company. These are planning
-          assumptions, not official rules.
+          {library.some((doc) => doc.id.startsWith("sample_"))
+            ? "In your library for this workspace. These are planning assumptions, not official rules."
+            : "Not in this workspace yet. Add them above, or browse the titles first — View still shows the sample text."}
         </p>
         <ul className="mt-3 grid gap-3">
-          {SAMPLE_REGULATIONS.map((sample) => (
+          {SAMPLE_REGULATIONS.map((sample) => {
+            const installed = library.some((doc) => doc.id === sample.id);
+            return (
             <li key={sample.id} className="glass rounded-2xl p-4">
               <p className="text-[11px] uppercase tracking-wide text-slate-500">
-                Sample assumption · {sample.publishedAt}
+                {installed ? "In library" : "Not installed"} · {sample.publishedAt}
               </p>
               <h3 className="mt-1 text-sm font-semibold text-white">{sample.title}</h3>
               <p className="mt-2 text-sm leading-6 text-slate-400">{sample.abstract}</p>
@@ -321,7 +354,8 @@ export default function RegulationsPage() {
                 View
               </button>
             </li>
-          ))}
+            );
+          })}
         </ul>
       </section>
 

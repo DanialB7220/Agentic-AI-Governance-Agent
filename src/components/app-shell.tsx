@@ -12,6 +12,7 @@ import {
   ScrollText,
   Shield,
 } from "lucide-react";
+import { OnboardingBanner } from "@/components/onboarding-banner";
 
 const NAV = [
   { href: "/copilot", label: "Copilot", icon: MessageSquare },
@@ -34,7 +35,7 @@ export function AppShell({
   user,
 }: {
   children: React.ReactNode;
-  user: { name: string; username: string };
+  user: { name: string; username: string; workspace?: "seeded" | "blank" };
 }) {
   const pathname = usePathname();
   const [health, setHealth] = useState<Health | null>(null);
@@ -156,7 +157,10 @@ export function AppShell({
             );
           })}
         </nav>
-        <main className="min-w-0 flex-1">{children}</main>
+        <main className="min-w-0 flex-1">
+          <OnboardingBanner />
+          {children}
+        </main>
       </div>
     </div>
   );

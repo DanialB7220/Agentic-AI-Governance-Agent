@@ -1,8 +1,9 @@
+import { getCurrentUser, type WorkspaceMode } from "./auth";
 import { countRecords, readKind, readOne, replaceAll } from "./db";
 import { riskForStatus } from "./frameworks";
 import { SAMPLE_REGULATIONS } from "./sample-regulations";
 import { mentionsClient, scrubJson } from "./scrub-names";
-import { seedDocuments, seedOrg } from "./seed";
+import { blankOrg, seedDocuments, seedOrg } from "./seed";
 import { requireUserId } from "./session";
 import { createId } from "./ids";
 import { actionItemsForFinding, actionItemsForPolicyChange } from "./teams";
@@ -48,17 +49,30 @@ function cleanAgencies(ids: string[] | undefined) {
   return next.length ? next : [...seedOrg.scanAgencies];
 }
 
-function normalizeOrg(org: Partial<OrgProfile> | null | undefined): OrgProfile {
+function normalizeOrg(
+  org: Partial<OrgProfile> | null | undefined,
+  mode: WorkspaceMode = "seeded",
+): OrgProfile {
+  const fallback = mode === "blank" ? blankOrg : seedOrg;
   const base = org ?? {};
   return {
-    ...seedOrg,
+    ...fallback,
     ...base,
-    frameworks: base.frameworks?.length ? base.frameworks : seedOrg.frameworks,
-    scanAgencies: cleanAgencies(base.scanAgencies),
-    scanKeywords: base.scanKeywords ?? seedOrg.scanKeywords,
-    jurisdictions: base.jurisdictions ?? seedOrg.jurisdictions,
-    updatedAt: base.updatedAt || seedOrg.updatedAt,
+    name: base.name ?? fallback.name,
+    industry: base.industry ?? fallback.industry,
+    size: base.size ?? fallback.size,
+    notes: base.notes ?? fallback.notes,
+    frameworks: base.frameworks?.length ? base.frameworks : fallback.frameworks,
+    scanAgencies: cleanAgencies(base.scanAgencies ?? fallback.scanAgencies),
+    scanKeywords: base.scanKeywords ?? fallback.scanKeywords,
+    jurisdictions: base.jurisdictions ?? fallback.jurisdictions,
+    updatedAt: base.updatedAt || fallback.updatedAt,
   };
+}
+
+async function workspaceMode(): Promise<WorkspaceMode> {
+  const user = await getCurrentUser();
+  return user?.workspace === "blank" ? "blank" : "seeded";
 }
 
 function normalizeReport(report: Report): Report {
@@ -210,9 +224,16 @@ async function persist(userId: string, state: StoreShape) {
   ]);
 }
 
-async function readState(userId: string): Promise<StoreShape> {
+async function readState(
+  userId: string,
+  mode: WorkspaceMode,
+): Promise<StoreShape> {
+  const fallbackOrg = mode === "blank" ? blankOrg : seedOrg;
   return {
-    org: normalizeOrg(await readOne<OrgProfile>(userId, "org", "current", seedOrg)),
+    org: normalizeOrg(
+      await readOne<OrgProfile>(userId, "org", "current", fallbackOrg),
+      mode,
+    ),
     documents: await readKind<StoredDocument>(userId, "document"),
     chunks: await readKind<Chunk>(userId, "chunk"),
     reports: (await readKind<Report>(userId, "report")).map(normalizeReport),
@@ -223,10 +244,22 @@ async function readState(userId: string): Promise<StoreShape> {
   };
 }
 
-function freshState(): StoreShape {
+function freshState(mode: WorkspaceMode): StoreShape {
+  if (mode === "blank") {
+    return {
+      org: normalizeOrg(blankOrg, "blank"),
+      documents: [],
+      chunks: [],
+      reports: [],
+      seenRegulationIds: [],
+      activity: [],
+      scan: EMPTY_SCAN,
+      chats: [],
+    };
+  }
   const documents = seedDocuments.map((doc) => ({ ...doc }));
   const state: StoreShape = {
-    org: normalizeOrg(seedOrg),
+    org: normalizeOrg(seedOrg, "seeded"),
     documents,
     chunks: documents.flatMap(chunkDocument),
     reports: [],
@@ -246,14 +279,110 @@ export async function loadStore(): Promise<StoreShape> {
   return withLock(userId, async () => {
     const again = memories.get(userId);
     if (again) return again;
+    const mode = await workspaceMode();
     const count = await countRecords(userId);
-    const state = count > 0 ? await readState(userId) : freshState();
-    if (count === 0 || scrubMemory(state) || ensureBuiltInSamples(state)) {
-      await persist(userId, state);
+    let state = count > 0 ? await readState(userId, mode) : freshState(mode);
+    let dirty = count === 0;
+    if (mode === "blank" && looksLikeAccidentalSeed(state)) {
+      state = freshState("blank");
+      dirty = true;
+    } else if (mode === "seeded") {
+      if (scrubMemory(state) || ensureBuiltInSamples(state)) dirty = true;
+    } else if (scrubMemoryBlank(state)) {
+      dirty = true;
     }
+    if (dirty) await persist(userId, state);
     memories.set(userId, state);
     return state;
   });
+}
+
+function looksLikeAccidentalSeed(state: StoreShape) {
+  return (
+    state.org.name === seedOrg.name &&
+    state.documents.some(
+      (doc) => doc.id === "doc_cms_4208_f3" || doc.id.startsWith("sample_"),
+    )
+  );
+}
+
+/** Install the five built-in sample regulations (onboarding / blank workspaces). */
+export async function installSampleRegulations() {
+  return edit((state) => {
+    const changed = ensureBuiltInSamples(state);
+    if (changed) {
+      remember(state, {
+        action: "upload",
+        detail: "Added built-in sample regulations to the library.",
+      });
+    }
+    return {
+      added: changed,
+      documents: state.documents.filter((doc) => doc.id.startsWith("sample_")),
+    };
+  });
+}
+
+/** Optional starter SOPs for a blank onboarding workspace (no CMS seed extract). */
+export async function installStarterPolicies() {
+  return edit((state) => {
+    const starters = seedDocuments.filter((doc) => doc.kind === "policy");
+    let added = 0;
+    for (const starter of starters) {
+      if (state.documents.some((doc) => doc.id === starter.id)) continue;
+      const doc = { ...starter };
+      state.documents = [doc, ...state.documents];
+      state.chunks = [
+        ...state.chunks.filter((chunk) => chunk.documentId !== doc.id),
+        ...chunkDocument(doc),
+      ];
+      added += 1;
+    }
+    if (added > 0) {
+      remember(state, {
+        action: "upload",
+        detail: `Added ${added} starter stand-in policies.`,
+      });
+    }
+    return { added, documents: state.documents.filter((doc) => doc.kind === "policy") };
+  });
+}
+
+/** Wipe a blank workspace back to empty onboarding (admin1). */
+export async function resetBlankWorkspace() {
+  const mode = await workspaceMode();
+  if (mode !== "blank") {
+    throw new Error("Only blank onboarding workspaces can be reset.");
+  }
+  const userId = await requireUserId();
+  return withLock(userId, async () => {
+    const state = freshState("blank");
+    await persist(userId, state);
+    memories.set(userId, state);
+    return state.org;
+  });
+}
+
+export async function getWorkspaceStatus() {
+  const mode = await workspaceMode();
+  const state = await loadStore();
+  const policies = state.documents.filter((doc) => doc.kind !== "regulation");
+  const regulations = state.documents.filter((doc) => doc.kind === "regulation");
+  const samples = regulations.filter((doc) => doc.id.startsWith("sample_"));
+  return {
+    workspace: mode,
+    orgNamed: Boolean(state.org.name.trim()),
+    orgName: state.org.name,
+    policyCount: policies.length,
+    regulationCount: regulations.length,
+    sampleCount: samples.length,
+    reportCount: state.reports.length,
+    onboardingComplete:
+      mode === "seeded" ||
+      (Boolean(state.org.name.trim()) &&
+        policies.length > 0 &&
+        regulations.length > 0),
+  };
 }
 
 async function edit<T>(fn: (state: StoreShape) => T | Promise<T>) {
@@ -277,6 +406,25 @@ function scrubMemory(state: StoreShape) {
   state.org.name = seedOrg.name;
   state.org.industry = seedOrg.industry;
   if (state.org.notes.startsWith("Demo tenant:")) state.org.notes = seedOrg.notes;
+  state.documents = scrubJson(state.documents);
+  state.chunks = scrubJson(state.chunks);
+  state.reports = scrubJson(state.reports);
+  state.activity = scrubJson(state.activity);
+  state.chats = scrubJson(state.chats);
+  return true;
+}
+
+/** Blank workspaces: scrub forbidden names but never force the demo tenant. */
+function scrubMemoryBlank(state: StoreShape) {
+  const before = JSON.stringify(state);
+  if (
+    !mentionsClient(before) &&
+    !before.includes("Demo Manufacturer") &&
+    !/drug manufacturer/i.test(before)
+  ) {
+    return false;
+  }
+  state.org = scrubJson(state.org);
   state.documents = scrubJson(state.documents);
   state.chunks = scrubJson(state.chunks);
   state.reports = scrubJson(state.reports);

@@ -17,6 +17,23 @@ export const seedOrg: OrgProfile = {
   updatedAt: new Date().toISOString(),
 };
 
+/** Empty workspace for onboarding demos (admin1). */
+export const blankOrg: OrgProfile = {
+  name: "",
+  industry: "",
+  size: "",
+  jurisdictions: [],
+  frameworks: ["cms-ma-pd"],
+  scanAgencies: [
+    "centers-for-medicare-medicaid-services",
+    "health-and-human-services-department",
+    "federal-trade-commission",
+  ],
+  scanKeywords: [],
+  notes: "",
+  updatedAt: new Date().toISOString(),
+};
+
 export const seedDocuments: StoredDocument[] = [
   {
     id: "doc_cms_4208_f3",

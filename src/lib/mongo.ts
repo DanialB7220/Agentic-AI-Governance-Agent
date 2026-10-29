@@ -13,6 +13,12 @@ function uri() {
 }
 
 async function ensureIndexes(db: Db) {
+  // Drop legacy unique email index (schema moved to username-only auth).
+  try {
+    await db.collection("users").dropIndex("email_1");
+  } catch {
+    /* index may not exist */
+  }
   await db.collection("users").createIndex({ username: 1 }, { unique: true });
   await db.collection("sessions").createIndex({ tokenHash: 1 }, { unique: true });
   await db.collection("sessions").createIndex({ expiresAt: 1 });

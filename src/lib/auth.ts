@@ -5,13 +5,14 @@ import { createSalt, hashPassword, passwordsMatch, sha256Hex } from "./password"
 
 const COOKIE = "ga_session";
 const MAX_AGE = 60 * 60 * 24 * 14;
-const ADMIN_USERNAME = "admin";
-const ADMIN_PASSWORD = "admin";
+
+export type WorkspaceMode = "seeded" | "blank";
 
 export type PublicUser = {
   id: string;
   username: string;
   name: string;
+  workspace: WorkspaceMode;
 };
 
 type UserRecord = {
@@ -20,6 +21,7 @@ type UserRecord = {
   name: string;
   passwordHash: string;
   salt: string;
+  workspace: WorkspaceMode;
   createdAt: string;
 };
 
@@ -32,7 +34,12 @@ type SessionRecord = {
 };
 
 function publicUser(user: UserRecord): PublicUser {
-  return { id: user._id, username: user.username, name: user.name };
+  return {
+    id: user._id,
+    username: user.username,
+    name: user.name,
+    workspace: user.workspace === "blank" ? "blank" : "seeded",
+  };
 }
 
 function normalizeUsername(value: string) {
@@ -69,21 +76,61 @@ async function startSession(userId: string) {
   });
 }
 
-/** Demo login: username admin / password admin. */
-export async function ensureAdminUser() {
+async function ensureUser(input: {
+  username: string;
+  password: string;
+  name: string;
+  workspace: WorkspaceMode;
+}) {
   const db = await getDb();
   const users = db.collection<UserRecord>("users");
-  const existing = await users.findOne({ username: ADMIN_USERNAME });
-  if (existing) return;
+  const existing = await users.findOne({ username: input.username });
+  if (existing) {
+    if (existing.workspace !== input.workspace) {
+      await users.updateOne(
+        { _id: existing._id },
+        { $set: { workspace: input.workspace, name: input.name } },
+      );
+    }
+    return existing._id;
+  }
   const salt = createSalt();
+  const id = createId("user");
   await users.insertOne({
-    _id: createId("user"),
-    username: ADMIN_USERNAME,
-    name: "Admin",
-    passwordHash: hashPassword(ADMIN_PASSWORD, salt),
+    _id: id,
+    username: input.username,
+    name: input.name,
+    passwordHash: hashPassword(input.password, salt),
     salt,
+    workspace: input.workspace,
     createdAt: new Date().toISOString(),
   });
+  return id;
+}
+
+/** Seeded demo: admin / admin */
+export async function ensureAdminUser() {
+  await ensureUser({
+    username: "admin",
+    password: "admin",
+    name: "Admin",
+    workspace: "seeded",
+  });
+}
+
+/** Scratch onboarding demo: admin1 / admin1 */
+export async function ensureAdmin1User() {
+  await ensureUser({
+    username: "admin1",
+    password: "admin1",
+    name: "Onboarding Admin",
+    workspace: "blank",
+  });
+}
+
+export async function ensureDemoUsers() {
+  await ensureAdminUser();
+  await ensureAdmin1User();
 }
 
 export async function signup(input: { username: string; password: string }) {
@@ -101,6 +148,7 @@ export async function signup(input: { username: string; password: string }) {
     name: username,
     passwordHash: hashPassword(input.password, salt),
     salt,
+    workspace: "blank",
     createdAt: new Date().toISOString(),
   };
   const db = await getDb();
@@ -117,7 +165,7 @@ export async function signup(input: { username: string; password: string }) {
 }
 
 export async function login(input: { username: string; password: string }) {
-  await ensureAdminUser();
+  await ensureDemoUsers();
   const username = normalizeUsername(input.username);
   const db = await getDb();
   const user = await db.collection<UserRecord>("users").findOne({ username });
@@ -126,7 +174,10 @@ export async function login(input: { username: string; password: string }) {
     throw new Error("Username or password is wrong.");
   }
   await startSession(user._id);
-  return publicUser(user);
+  return publicUser({
+    ...user,
+    workspace: user.workspace === "blank" ? "blank" : "seeded",
+  });
 }
 
 export async function logout() {

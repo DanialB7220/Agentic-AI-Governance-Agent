@@ -23,6 +23,7 @@ export default function OrgPage() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [policyBusy, setPolicyBusy] = useState(false);
 
   useEffect(() => {
     Promise.all([
@@ -50,6 +51,7 @@ export default function OrgPage() {
     }
     setOrg(json.org);
     setSaved(true);
+    window.dispatchEvent(new Event("ga-workspace-refresh"));
     setTimeout(() => setSaved(false), 1600);
   }
 
@@ -57,13 +59,48 @@ export default function OrgPage() {
     return <p className="p-8 text-sm text-slate-400">Loading organization…</p>;
   }
 
+  const isBlank = !org.name.trim();
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Organization</h1>
       <p className="mt-2 text-sm text-slate-400">
-        This is the snapshot Scout and Auditor compare CMS-4208-F3 against.
-        Replace the demo stand-in SOPs with your real (redacted) policies.
+        {isBlank
+          ? "Step 1 of onboarding: name the company, set frameworks and agencies, then add policies the agents will score against."
+          : "This is the snapshot Scout and Auditor compare regulations against. Replace stand-in SOPs with your real (redacted) policies."}
       </p>
+      {isBlank || docs.filter((d) => d.kind === "policy").length === 0 ? (
+        <div className="glass mt-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl px-4 py-3 text-sm text-amber-100/90">
+          <p>
+            {isBlank
+              ? "Start with a company name, industry, and notes. Then upload a policy below, or load starters in one click."
+              : "No policies on file yet. Upload one below, or load starter stand-in SOPs."}
+          </p>
+          <button
+            type="button"
+            disabled={policyBusy}
+            onClick={() => {
+              setPolicyBusy(true);
+              setError("");
+              void fetch("/api/onboarding/policies", { method: "POST" })
+                .then(async (res) => {
+                  const json = await res.json().catch(() => ({}));
+                  if (!res.ok) {
+                    setError(json.error || "Could not add starter policies.");
+                    return;
+                  }
+                  const d = await fetch("/api/documents").then((r) => r.json());
+                  setDocs(d.documents ?? []);
+                  window.dispatchEvent(new Event("ga-workspace-refresh"));
+                })
+                .finally(() => setPolicyBusy(false));
+            }}
+            className="h-9 shrink-0 cursor-pointer rounded-full bg-amber-500 px-3 text-xs font-medium text-slate-950 hover:bg-amber-400 disabled:opacity-40"
+          >
+            {policyBusy ? "Adding…" : "Add starter policies"}
+          </button>
+        </div>
+      ) : null}
 
       <form onSubmit={onSubmit} className="mt-8 grid gap-4">
         <Field label="Name" htmlFor="name">
