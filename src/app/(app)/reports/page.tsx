@@ -71,7 +71,7 @@ export default function ReportsPage() {
             >
               <p className="text-sm font-semibold text-white">{r.title}</p>
               <p className="mt-1 text-xs text-slate-400">
-                {r.createdAt.slice(0, 10)} · saved record · {r.coveragePct}% covered ·{" "}
+                {r.createdAt.slice(0, 10)} · saved record · coverage {r.coveragePct}% (higher better) ·{" "}
                 {r.frameworks.map((f) => FRAMEWORK_LABEL[f]).join(", ")}
                 {r.changes?.length
                   ? ` · ${r.changes.length} policy change${r.changes.length === 1 ? "" : "s"}`

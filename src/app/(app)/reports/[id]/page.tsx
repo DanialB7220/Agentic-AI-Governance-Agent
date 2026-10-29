@@ -110,9 +110,14 @@ export default function ReportDetailPage({
         </a>
       </div>
       <p className="mt-2 font-mono text-sm text-amber-300">
-        {report.coveragePct}% of scored controls have supporting language
+        Coverage {report.coveragePct}% — higher is better (share of controls
+        with supporting policy language)
       </p>
-      <p className="mt-1 text-sm text-slate-400">{report.summary}</p>
+      <p className="mt-1 text-xs text-slate-500">
+        Separate from risk level: each finding below is high / medium / low
+        (lower is better). High = missing control language.
+      </p>
+      <p className="mt-2 text-sm text-slate-400">{report.summary}</p>
       {report.regulationTitle ? (
         <p className="mt-1 text-sm text-slate-500">
           Regulation: {report.regulationTitle} · {report.createdAt.slice(0, 10)}
@@ -246,7 +251,13 @@ export default function ReportDetailPage({
       ) : null}
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-amber-200">Findings</h2>
+        <h2 className="text-sm font-semibold text-amber-200">
+          Findings (risk level per control)
+        </h2>
+        <p className="mt-1 text-xs text-slate-500">
+          Risk level is per gap (high / medium / low). Coverage % above is the
+          overall “how much is covered” score.
+        </p>
         <ul className="mt-3 grid gap-2">
           {report.findings.map((f) => (
             <li key={f.controlId} className="glass rounded-xl px-4 py-3">
@@ -256,7 +267,7 @@ export default function ReportDetailPage({
                 </p>
                 <span className="flex items-center gap-2">
                   <span className="text-[11px] uppercase tracking-wide text-slate-400">
-                    {f.risk} risk
+                    Risk: {f.risk} (lower better)
                   </span>
                   <StatusBadge status={f.status} />
                 </span>

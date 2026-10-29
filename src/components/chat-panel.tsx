@@ -438,7 +438,7 @@ export function ChatPanel({
                       href={`/reports/${m.report.id}`}
                       className="cursor-pointer text-sm font-medium text-amber-300 hover:text-amber-200"
                     >
-                      Open report · {m.report.coveragePct}% covered
+                      Open report · coverage {m.report.coveragePct}% (higher better)
                     </Link>
                     <a
                       href={`/api/reports/${m.report.id}/pdf`}

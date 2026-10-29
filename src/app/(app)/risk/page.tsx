@@ -28,58 +28,93 @@ export default function RiskPage() {
     return <p className="p-8 text-sm text-slate-400">Loading risk…</p>;
   }
 
+  const coverageHint =
+    view.coveragePct === null
+      ? "Run a report to get a coverage score."
+      : view.coveragePct >= 70
+        ? "Higher is better — more controls look covered in your policies."
+        : view.coveragePct >= 40
+          ? "Mid range — some controls look covered; gaps remain."
+          : "Lower is worse — most controls are missing from your policies.";
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <h1 className="text-2xl font-semibold tracking-tight">Compliance risk</h1>
       <p className="mt-2 text-sm text-slate-400">
-        Latest audit, open high gaps, and rules saved in the last seven days.
+        Two different numbers: how much looks covered overall, vs how bad each
+        open gap is.
       </p>
 
-      <section className="glass mt-6 rounded-2xl p-4 text-sm leading-6 text-slate-300">
-        <h2 className="text-sm font-semibold text-amber-200">How risk is calculated</h2>
-        <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-slate-400">
-          <li>
-            Auditor scores each in-scope control (CMS MA/Part D, HIPAA, SOC 2, …)
-            by searching your org notes and policies for that control’s keywords.
-          </li>
-          <li>
-            Status: <span className="text-slate-200">covered</span> if enough
-            keywords match (≥ ~45%), <span className="text-slate-200">partial</span>{" "}
-            if some match, <span className="text-slate-200">missing</span> if none.
-          </li>
-          <li>
-            Risk level from status: missing →{" "}
-            <span className="text-rose-200">high</span>, partial →{" "}
-            <span className="text-amber-200">medium</span>, covered →{" "}
-            <span className="text-emerald-200">low</span>.
-          </li>
-          <li>
-            <span className="text-slate-200">Coverage %</span> = share of scored
-            controls that are covered on the latest report.
-          </li>
-          <li>
-            This page shows that coverage, open high gaps from the latest report,
-            open policy changes across reports, and regulations saved in the last
-            7 days — plus the last Federal Register scan time.
-          </li>
-        </ol>
-        <p className="mt-3 text-xs text-slate-500">
-          Heuristic readiness signal for internal planning — not a HIPAA/CMS
-          attestation or legal opinion.
-        </p>
+      <section className="mt-6 grid gap-3 sm:grid-cols-2">
+        <div className="glass rounded-2xl p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-emerald-300/90">
+            Coverage % — overall score
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            <span className="font-medium text-white">Higher is better.</span>{" "}
+            Share of checklist controls that already have matching language in
+            your policies. Think “how much of the homework is done.”
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            Example: 80% covered = most controls look OK on paper.
+          </p>
+        </div>
+        <div className="glass rounded-2xl p-4">
+          <p className="text-xs font-medium uppercase tracking-wide text-rose-300/90">
+            Risk level — per gap
+          </p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            <span className="font-medium text-white">Lower is better.</span> Each
+            control gets high / medium / low from how complete it looks: missing
+            → high, partial → medium, covered → low.
+          </p>
+          <p className="mt-2 text-xs text-slate-500">
+            “Open high risks” = gaps that are still missing (the urgent ones).
+          </p>
+        </div>
       </section>
 
       <div className="mt-8 grid gap-3 sm:grid-cols-3">
         <Stat
-          label="Latest coverage"
+          label="Coverage % (higher = better)"
           value={view.coveragePct === null ? "—" : `${view.coveragePct}%`}
+          hint={coverageHint}
         />
-        <Stat label="Open high risks" value={String(view.openHigh.length)} />
+        <Stat
+          label="Open high risks (lower = better)"
+          value={String(view.openHigh.length)}
+          hint="Count of missing controls on the latest report — not the same as coverage %."
+        />
         <Stat
           label="Open policy changes"
           value={String(view.openChangeCount)}
+          hint="Suggested SOP edits still marked open across reports."
         />
       </div>
+
+      <section className="glass mt-6 rounded-2xl p-4 text-sm leading-6 text-slate-400">
+        <h2 className="text-sm font-semibold text-amber-200">Quick read</h2>
+        <ul className="mt-2 list-disc space-y-1.5 pl-5">
+          <li>
+            <span className="text-slate-200">High coverage % + few high risks</span>{" "}
+            → policies look strong overall.
+          </li>
+          <li>
+            <span className="text-slate-200">Low coverage % + many high risks</span>{" "}
+            → lots of missing control language; start with those gaps.
+          </li>
+          <li>
+            Numbers refresh when you run a{" "}
+            <span className="text-slate-200">new</span> gap report (Copilot,
+            Regulations ingest, or Reports). Uploading policies alone does not
+            change Risk until you re-run.
+          </li>
+        </ul>
+        <p className="mt-3 text-xs text-slate-500">
+          Internal readiness heuristic — not a HIPAA/CMS attestation or legal
+          opinion.
+        </p>
+      </section>
 
       <section className="glass mt-6 rounded-2xl p-4">
         <h2 className="text-sm font-semibold text-amber-200">Last audit</h2>
@@ -108,7 +143,13 @@ export default function RiskPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="text-sm font-semibold text-rose-200">Open high risks</h2>
+        <h2 className="text-sm font-semibold text-rose-200">
+          Open high risks (missing controls)
+        </h2>
+        <p className="mt-1 text-xs text-slate-500">
+          These are individual gaps rated high — separate from the overall
+          coverage %.
+        </p>
         <ul className="mt-3 grid gap-2">
           {view.openHigh.length === 0 ? (
             <li className="text-sm text-slate-400">No high gaps on the latest report.</li>
@@ -116,6 +157,9 @@ export default function RiskPage() {
             view.openHigh.map((item) => (
               <li key={item.title} className="glass rounded-xl px-4 py-3">
                 <p className="text-sm font-medium">{item.title}</p>
+                <p className="mt-1 text-xs uppercase tracking-wide text-rose-300/80">
+                  Risk level: high
+                </p>
                 <p className="mt-1 text-sm text-slate-400">{item.action}</p>
               </li>
             ))
@@ -144,11 +188,20 @@ export default function RiskPage() {
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint: string;
+}) {
   return (
     <div className="glass rounded-2xl px-4 py-4">
       <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
       <p className="mt-2 text-2xl font-semibold text-white">{value}</p>
+      <p className="mt-2 text-xs leading-5 text-slate-500">{hint}</p>
     </div>
   );
 }
