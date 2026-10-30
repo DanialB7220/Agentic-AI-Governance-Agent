@@ -13,8 +13,6 @@ import {
   Shield,
   Sparkles,
 } from "lucide-react";
-import { OnboardingBanner } from "@/components/onboarding-banner";
-
 const BASE_NAV = [
   { href: "/copilot", label: "Copilot", icon: MessageSquare },
   { href: "/regulations", label: "Regulations", icon: BookOpen },
@@ -40,13 +38,12 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [health, setHealth] = useState<Health | null>(null);
-  const NAV =
-    user.workspace === "blank"
-      ? [
-          { href: "/onboarding", label: "Setup", icon: Sparkles },
-          ...BASE_NAV,
-        ]
-      : BASE_NAV;
+  const [needsSetup, setNeedsSetup] = useState(
+    user.workspace === "blank",
+  );
+  const NAV = needsSetup
+    ? [{ href: "/onboarding", label: "Setup", icon: Sparkles }, ...BASE_NAV]
+    : BASE_NAV;
 
   useEffect(() => {
     fetch("/api/health")
@@ -54,6 +51,24 @@ export function AppShell({
       .then(setHealth)
       .catch(() => setHealth(null));
   }, []);
+
+  useEffect(() => {
+    if (user.workspace !== "blank") {
+      setNeedsSetup(false);
+      return;
+    }
+    function refreshSetup() {
+      fetch("/api/me")
+        .then((r) => r.json())
+        .then((json) => {
+          setNeedsSetup(!(json.workspace?.onboardingComplete ?? false));
+        })
+        .catch(() => setNeedsSetup(true));
+    }
+    refreshSetup();
+    window.addEventListener("ga-workspace-refresh", refreshSetup);
+    return () => window.removeEventListener("ga-workspace-refresh", refreshSetup);
+  }, [user.workspace, pathname]);
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -165,10 +180,7 @@ export function AppShell({
             );
           })}
         </nav>
-        <main className="min-w-0 flex-1">
-          <OnboardingBanner />
-          {children}
-        </main>
+        <main className="min-w-0 flex-1">{children}</main>
       </div>
     </div>
   );
