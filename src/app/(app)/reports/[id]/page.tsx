@@ -5,6 +5,7 @@ import { use, useEffect, useState } from "react";
 import { Markdown } from "@/components/markdown";
 import { StatusBadge } from "@/components/status-badge";
 import { FRAMEWORK_LABEL } from "@/lib/frameworks";
+import { formatMemoDate, policyCoverage } from "@/lib/memo";
 import type { Report, TeamActionItem } from "@/lib/types";
 
 function TeamActionList({ items }: { items?: TeamActionItem[] }) {
@@ -94,6 +95,8 @@ export default function ReportDetailPage({
   }
 
   const teamRollup = rollupByTeam(report);
+  const byPolicy = policyCoverage(report);
+  const memoDate = formatMemoDate(new Date(report.createdAt));
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
@@ -120,10 +123,10 @@ export default function ReportDetailPage({
       <p className="mt-2 text-sm text-slate-400">{report.summary}</p>
       {report.regulationTitle ? (
         <p className="mt-1 text-sm text-slate-500">
-          Regulation: {report.regulationTitle} · {report.createdAt.slice(0, 10)}
+          Regulation: {report.regulationTitle} · {memoDate}
         </p>
       ) : (
-        <p className="mt-1 text-sm text-slate-500">{report.createdAt.slice(0, 10)}</p>
+        <p className="mt-1 text-sm text-slate-500">{memoDate}</p>
       )}
       {report.scope ? (
         <p className="mt-3 text-sm leading-6 text-slate-300">{report.scope}</p>
@@ -167,6 +170,33 @@ export default function ReportDetailPage({
           </>
         )}
       </form>
+
+      {byPolicy.length > 0 ? (
+        <section className="mt-8">
+          <h2 className="text-sm font-semibold text-amber-200">
+            Coverage by policy
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Share of the controls each policy is mapped to that look covered.
+            Higher is better.
+          </p>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {byPolicy.map((row) => (
+              <li key={row.policyTitle} className="glass rounded-xl px-4 py-3">
+                <p className="text-sm font-medium">{row.policyTitle}</p>
+                <p className="mt-1 font-mono text-lg text-amber-300">
+                  {row.coveragePct === null ? "—" : `${row.coveragePct}%`}
+                </p>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {row.coveragePct === null
+                    ? "No scored controls map to this policy."
+                    : `${row.covered} covered · ${row.partial} partial · ${row.missing} missing`}
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {report.changes && report.changes.length > 0 ? (
         <section className="mt-8">

@@ -1,6 +1,7 @@
 import { completeChat } from "./llm/openai";
 import { CONTROLS, FRAMEWORK_LABEL, toFinding } from "./frameworks";
 import { createId } from "./ids";
+import { formatMemoDate, withDateLine, withPolicyCoverage } from "./memo";
 import { retrieve } from "./rag";
 import { fetchRegulationFeed } from "./regulations";
 import { addReport, getOrg, listDocuments } from "./store";
@@ -318,8 +319,13 @@ async function runAuditor(input: {
     user: `${structured}\n\nScout notes (use for context, do not treat as org evidence):\n${input.scoutNotes}`,
     maxTokens: 1800,
   });
-  // The rewrite can drop or misstate the date, so pin it under the title.
-  const markdown = withDateLine(narrative || structured, dateLine);
+  // The rewrite can drop or misstate the date and per-policy coverage, so pin
+  // both after it.
+  const policiesChecked = input.docTitles;
+  const markdown = withPolicyCoverage(
+    withDateLine(narrative || structured, createdAt),
+    { findings, policiesChecked },
+  );
 
   return {
     id: createId("rpt"),
@@ -330,7 +336,7 @@ async function runAuditor(input: {
     scope: `Readiness review for ${input.orgName}${
       input.regulationTitle ? ` against ${input.regulationTitle}` : ""
     }. Internal policies were checked. This is not a CMS filing.`,
-    policiesChecked: input.docTitles,
+    policiesChecked,
     summary: summarize(findings, coveragePct, changes.length),
     coveragePct,
     findings,
@@ -631,25 +637,6 @@ function summarize(
   const changeBit =
     changeCount > 0 ? ` ${changeCount} policy change(s) listed.` : "";
   return `${pct}% of scored controls look covered. ${missing} missing, ${partial} partial.${changeBit} Internal memo only — not an attestation.`;
-}
-
-function formatMemoDate(date: Date) {
-  return date.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
-}
-
-/** Put the date line right after the first heading, replacing any the model wrote. */
-function withDateLine(markdown: string, dateLine: string) {
-  const lines = markdown
-    .split("\n")
-    .filter((line) => !/^\s*(\*\*)?(memo )?date(\*\*)?:(\*\*)?\s/i.test(line));
-  const heading = lines.findIndex((line) => line.startsWith("# "));
-  if (heading === -1) return [dateLine, "", ...lines].join("\n");
-  lines.splice(heading + 1, 0, "", dateLine);
-  return lines.join("\n");
 }
 
 function renderReport(input: {

@@ -24,13 +24,6 @@ const BASE_NAV = [
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 
-type Health = {
-  knowledgeBase: boolean;
-  rag?: string;
-  documents: number;
-  embeddings?: number;
-};
-
 export function AppShell({
   children,
   user,
@@ -39,20 +32,12 @@ export function AppShell({
   user: { name: string; username: string; workspace?: "seeded" | "blank" };
 }) {
   const pathname = usePathname();
-  const [health, setHealth] = useState<Health | null>(null);
   const [needsSetup, setNeedsSetup] = useState(
     user.workspace === "blank",
   );
   const NAV = needsSetup
     ? [{ href: "/onboarding", label: "Setup", icon: Sparkles }, ...BASE_NAV]
     : BASE_NAV;
-
-  useEffect(() => {
-    fetch("/api/health")
-      .then((r) => r.json())
-      .then(setHealth)
-      .catch(() => setHealth(null));
-  }, []);
 
   useEffect(() => {
     if (user.workspace !== "blank") {
@@ -112,7 +97,7 @@ export function AppShell({
           })}
         </nav>
 
-        <div className="mb-3 rounded-xl border border-white/10 bg-white/4 px-3 py-3 text-xs text-slate-400">
+        <div className="rounded-xl border border-white/10 bg-white/4 px-3 py-3 text-xs text-slate-400">
           <p className="truncate font-medium text-slate-200">{user.name}</p>
           <p className="truncate">@{user.username}</p>
           <button
@@ -122,27 +107,6 @@ export function AppShell({
           >
             Log out
           </button>
-        </div>
-
-        <div className="rounded-xl border border-white/10 bg-white/4 px-3 py-3 text-xs text-slate-400">
-          <p className="mb-1 font-medium text-slate-200">Retrieval</p>
-          <p>
-            {health?.knowledgeBase
-              ? "AWS Bedrock Knowledge Base"
-              : health?.rag === "titan"
-                ? "AWS Titan embeddings"
-                : health?.rag === "openai"
-                  ? "OpenAI embeddings"
-                  : health?.rag === "azure"
-                    ? "Azure OpenAI embeddings"
-                    : "Local keyword RAG"}
-          </p>
-          <p className="mt-1">
-            {health?.documents ?? "—"} documents
-            {typeof health?.embeddings === "number"
-              ? ` · ${health.embeddings} vectors`
-              : ""}
-          </p>
         </div>
       </aside>
 

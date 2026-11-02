@@ -6,6 +6,7 @@ import { mentionsClient, scrubJson } from "./scrub-names";
 import { blankOrg, seedDocuments, seedOrg } from "./seed";
 import { requireUserId } from "./session";
 import { createId } from "./ids";
+import { withDateLine, withPolicyCoverage } from "./memo";
 import { actionItemsForFinding, actionItemsForPolicyChange } from "./teams";
 import {
   SCAN_AGENCIES,
@@ -76,11 +77,18 @@ async function workspaceMode(): Promise<WorkspaceMode> {
 }
 
 function normalizeReport(report: Report): Report {
+  const findings = (report.findings ?? []).map(normalizeFinding);
+  const policiesChecked = report.policiesChecked ?? [];
   return {
     ...report,
     scope: report.scope || report.summary,
-    policiesChecked: report.policiesChecked ?? [],
-    findings: (report.findings ?? []).map(normalizeFinding),
+    policiesChecked,
+    findings,
+    // Older memos predate the pinned date and per-policy coverage.
+    markdown: withPolicyCoverage(
+      withDateLine(report.markdown ?? "", new Date(report.createdAt)),
+      { findings, policiesChecked },
+    ),
     changes: (report.changes ?? []).map((change, index) =>
       normalizeChange(change, `${report.id}-chg-${index}`, report.createdAt, index),
     ),

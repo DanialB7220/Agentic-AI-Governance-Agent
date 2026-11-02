@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 
 type RiskView = {
   coveragePct: number | null;
+  orgCoveragePct: number | null;
+  orgControlCount: number;
+  orgCoveredCount: number;
   lastAuditAt: string | null;
   lastAuditTitle: string | null;
   lastAuditId: string | null;
@@ -74,9 +77,23 @@ export default function RiskPage() {
         </div>
       </section>
 
-      <div className="mt-8 grid gap-3 sm:grid-cols-3">
+      <div className="glass mt-8 rounded-2xl px-5 py-5">
+        <p className="text-xs font-medium uppercase tracking-wide text-emerald-300/90">
+          Org-wide coverage % (higher = better)
+        </p>
+        <p className="mt-2 text-4xl font-semibold text-white">
+          {view.orgCoveragePct === null ? "—" : `${view.orgCoveragePct}%`}
+        </p>
+        <p className="mt-2 text-xs leading-5 text-slate-500">
+          {view.orgCoveragePct === null
+            ? "Run a report to get an org-wide score."
+            : `${view.orgCoveredCount} of ${view.orgControlCount} controls covered across every framework scored, using the most recent result for each control.`}
+        </p>
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-3">
         <Stat
-          label="Coverage % (higher = better)"
+          label="Latest memo coverage %"
           value={view.coveragePct === null ? "—" : `${view.coveragePct}%`}
           hint={coverageHint}
         />

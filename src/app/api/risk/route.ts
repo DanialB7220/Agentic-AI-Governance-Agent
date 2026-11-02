@@ -17,6 +17,17 @@ export const GET = authed(async () => {
       (finding.risk ?? riskForStatus(finding.status)) === "high" &&
       finding.status !== "covered",
   );
+  // Org-wide: the most recent result for every control any report has scored.
+  const latestByControl = new Map<string, (typeof findings)[number]>();
+  for (const report of reports) {
+    for (const finding of report.findings ?? []) {
+      if (!latestByControl.has(finding.controlId)) {
+        latestByControl.set(finding.controlId, finding);
+      }
+    }
+  }
+  const orgFindings = [...latestByControl.values()];
+  const orgCovered = orgFindings.filter((f) => f.status === "covered").length;
   const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const newRules = documents.filter(
     (doc) =>
@@ -28,6 +39,11 @@ export const GET = authed(async () => {
   );
   return Response.json({
     coveragePct: latest?.coveragePct ?? null,
+    orgCoveragePct: orgFindings.length
+      ? Math.round((orgCovered / orgFindings.length) * 100)
+      : null,
+    orgControlCount: orgFindings.length,
+    orgCoveredCount: orgCovered,
     lastAuditAt: latest?.createdAt ?? null,
     lastAuditTitle: latest?.title ?? null,
     lastAuditId: latest?.id ?? null,
