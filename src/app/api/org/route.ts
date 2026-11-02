@@ -11,8 +11,8 @@ const Patch = z.object({
   industry: z.string().max(160).optional(),
   size: z.string().max(80).optional(),
   jurisdictions: z.array(z.string()).optional(),
-  frameworks: z.array(z.enum(FRAMEWORKS)).optional(),
-  scanAgencies: z.array(z.string().min(1).max(120)).max(12).optional(),
+  frameworks: z.array(z.enum(FRAMEWORKS)).min(1).optional(),
+  scanAgencies: z.array(z.string().min(1).max(120)).min(1).max(12).optional(),
   scanKeywords: z.array(z.string().min(1).max(80)).max(12).optional(),
   notes: z.string().max(4000).optional(),
 });

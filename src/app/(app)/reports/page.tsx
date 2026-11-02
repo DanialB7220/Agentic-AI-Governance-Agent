@@ -26,7 +26,8 @@ export default function ReportsPage() {
     const res = await fetch("/api/reports", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ frameworks: ["cms-ma-pd", "hipaa"] }),
+      // No frameworks: the API uses the org's in-scope list from Settings.
+      body: JSON.stringify({}),
     });
     const json = await res.json();
     setBusy(false);

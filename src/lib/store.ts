@@ -289,8 +289,7 @@ export async function loadStore(): Promise<StoreShape> {
     } else if (mode === "seeded") {
       if (
         scrubMemory(state) ||
-        ensureBuiltInSamples(state) ||
-        ensureHipaaFramework(state)
+        ensureBuiltInSamples(state)
       ) {
         dirty = true;
       }
@@ -436,13 +435,6 @@ function scrubMemoryBlank(state: StoreShape) {
   state.reports = scrubJson(state.reports);
   state.activity = scrubJson(state.activity);
   state.chats = scrubJson(state.chats);
-  return true;
-}
-
-/** Seeded healthcare demos always include HIPAA in-scope. */
-function ensureHipaaFramework(state: StoreShape) {
-  if (state.org.frameworks.includes("hipaa")) return false;
-  state.org.frameworks = [...state.org.frameworks, "hipaa"];
   return true;
 }
 

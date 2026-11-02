@@ -9,8 +9,10 @@ import {
   actionItemsForPolicyChange,
   leadForTeam,
 } from "./teams";
+import { SCAN_AGENCIES } from "./types";
 import type {
   ChatEvent,
+  OrgProfile,
   FrameworkId,
   GapFinding,
   PolicyChange,
@@ -58,7 +60,7 @@ export async function* runCopilot(input: {
   if (!wantReport && SMALL_TALK_RE.test(query)) {
     const org = await getOrg();
     const reply = await completeChat({
-      system: chatSystemPrompt(org.name),
+      system: chatSystemPrompt(org),
       user: query,
       history,
       temperature: 0.7,
@@ -75,12 +77,18 @@ export async function* runCopilot(input: {
   }
 
   yield { type: "status", step: "Retrieving policies, evidence, and regs", agent: "scout" };
-  const [org, docs, retrieved, feed] = await Promise.all([
+  const [org, docs, candidates, feed] = await Promise.all([
     getOrg(),
     listDocuments(),
-    retrieve(query, 10),
+    retrieve(query, 16),
     fetchRegulationFeed().catch(() => []),
   ]);
+  // Frameworks the org removed from scope stay out of answers and reports
+  // unless the user names one explicitly.
+  const allowed = new Set([...org.frameworks, ...mentionedFrameworks(query)]);
+  const retrieved = candidates
+    .filter((r) => !r.chunk.metadata.framework || allowed.has(r.chunk.metadata.framework))
+    .slice(0, 10);
 
   yield {
     type: "citations",
@@ -100,8 +108,9 @@ export async function* runCopilot(input: {
     query,
     history,
     conversational: !wantReport,
+    org,
     orgName: org.name,
-    orgNotes: `${org.industry}. Frameworks: ${org.frameworks.map((f) => FRAMEWORK_LABEL[f]).join(", ")}. ${org.notes}`,
+    orgNotes: `${org.industry}. ${scopeLine(org)} ${org.notes}`,
     retrieved,
     recentRegs: feed.slice(0, 5).map((r) => `${r.publishedAt} — ${r.agency}: ${r.title}`),
   });
@@ -127,6 +136,7 @@ export async function* runCopilot(input: {
     query,
     orgName: org.name,
     orgNotes: org.notes,
+    agencies: agencyLabels(org),
     frameworks,
     orgCorpus,
     scoutNotes,
@@ -145,14 +155,27 @@ export async function* runCopilot(input: {
   yield { type: "done" };
 }
 
-function chatSystemPrompt(orgName: string) {
-  return `You are Governance Agent, a friendly, knowledgeable assistant for ${orgName}. Talk like a normal chatbot: answer the user's actual question directly and conversationally, follow up on earlier turns, and match the length of your reply to the question (short questions get short answers). You can help with anything — general questions, writing, explanations — not only compliance. When the question is about governance, policies, or regulations, use the retrieved context provided and cite document titles; passages labeled REGULATION are government text and never prove the company already complies. Ignore retrieved context that isn't relevant to the question, and don't summarize it unprompted. Don't repeat a previous answer; if the user asks something new, answer that. Only mention gap reports if the user seems to want one (they can say "run a gap report"). Not legal advice.`;
+function agencyLabels(org: OrgProfile) {
+  return SCAN_AGENCIES.filter((a) => org.scanAgencies.includes(a.id)).map(
+    (a) => a.label,
+  );
+}
+
+function scopeLine(org: OrgProfile) {
+  const frameworks = org.frameworks.map((f) => FRAMEWORK_LABEL[f]).join(", ");
+  const agencies = agencyLabels(org).join(", ");
+  return `In-scope frameworks: ${frameworks || "(none)"}. Agencies watched: ${agencies || "(none)"}.`;
+}
+
+function chatSystemPrompt(org: OrgProfile) {
+  return `You are Governance Agent, a friendly, knowledgeable assistant for ${org.name || "this organization"}. ${scopeLine(org)} When a governance question is ambiguous, answer for these frameworks and agencies. If the user asks about a framework that is not in scope, still answer, but mention it isn't in their scope and can be added in Settings. Talk like a normal chatbot: answer the user's actual question directly and conversationally, follow up on earlier turns, and match the length of your reply to the question (short questions get short answers). You can help with anything — general questions, writing, explanations — not only compliance. When the question is about governance, policies, or regulations, use the retrieved context provided and cite document titles; passages labeled REGULATION are government text and never prove the company already complies. Ignore retrieved context that isn't relevant to the question, and don't summarize it unprompted. Don't repeat a previous answer; if the user asks something new, answer that. Only mention gap reports if the user seems to want one (they can say "run a gap report"). Not legal advice.`;
 }
 
 async function runScout(input: {
   query: string;
   history?: { role: "user" | "assistant"; content: string }[];
   conversational?: boolean;
+  org: OrgProfile;
   orgName: string;
   orgNotes: string;
   retrieved: RetrievedChunk[];
@@ -169,14 +192,14 @@ async function runScout(input: {
   const background = `Org: ${input.orgName}\n${input.orgNotes}\n\nRecent federal items:\n${input.recentRegs.join("\n") || "(none)"}\n\nRetrieved context:\n${context || "(none)"}`;
   const llm = input.conversational
     ? await completeChat({
-        system: `${chatSystemPrompt(input.orgName)}\n\nBackground (use only if relevant to the question):\n${background}`,
+        system: `${chatSystemPrompt(input.org)}\n\nBackground (use only if relevant to the question):\n${background}`,
         user: input.query,
         history: input.history,
         temperature: 0.5,
       })
     : await completeChat({
         system:
-          "You are Scout, a regulation analyst for a governance copilot. Retrieved passages are labeled POLICY (company) or REGULATION (government). Never treat a REGULATION as proof the company already complies. Cite document titles. Not a legal opinion. If context is thin, say what is missing.",
+          `You are Scout, a regulation analyst for a governance copilot. ${scopeLine(input.org)} Focus your analysis on those frameworks unless the question names another. Retrieved passages are labeled POLICY (company) or REGULATION (government). Never treat a REGULATION as proof the company already complies. Cite document titles. Not a legal opinion. If context is thin, say what is missing.`,
         user: `${background}\n\nUser question:\n${input.query}`,
       });
 
@@ -202,7 +225,7 @@ async function runScout(input: {
       ? `What we already have on file:\n${bullets.join("\n")}`
       : "No matching org documents yet. Upload policies or a regulation to ground this.",
     "",
-    "Ask me to **run a gap report** (CMS MA/Part D, SOC 2) and Auditor will score controls, list gaps, and give a 30/60/90-day plan. This is an internal readiness memo, not an attestation or CMS filing.",
+    `Ask me to **run a gap report** (${input.org.frameworks.map((f) => FRAMEWORK_LABEL[f]).join(", ")}) and Auditor will score controls, list gaps, and give a 30/60/90-day plan. This is an internal readiness memo, not an attestation or regulatory filing.`,
   ].join("\n");
 }
 
@@ -210,6 +233,7 @@ async function runAuditor(input: {
   query: string;
   orgName: string;
   orgNotes: string;
+  agencies: string[];
   frameworks: FrameworkId[];
   orgCorpus: string[];
   scoutNotes: string;
@@ -264,6 +288,7 @@ async function runAuditor(input: {
   const changes = stampChanges(
     await draftPolicyChanges({
       orgName: input.orgName,
+      frameworks: input.frameworks,
       retrieved: input.retrieved,
       scoutNotes: input.scoutNotes,
       query: input.query,
@@ -282,11 +307,11 @@ async function runAuditor(input: {
     roadmap,
     docTitles: input.docTitles,
     regulationTitle: input.regulationTitle,
+    agencies: input.agencies,
   });
 
   const narrative = await completeChat({
-    system:
-      "You are Auditor. Rewrite the readiness memo in clear English. Keep every finding, every policy change, and every team action item (Governance, Market access, Engineering, MLR, Legal, Privacy, Security, Finance, Patient support). Name the accountable team and what each level should do. Do not invent evidence. Label this as an internal memo, not a CMS filing, SOC attestation, or legal opinion. Use markdown. Treat the org as a healthcare company and plan partner, not an MA organization, unless the org notes say otherwise.",
+    system: `You are Auditor. Rewrite the readiness memo in clear English. This memo covers only: ${input.frameworks.map((f) => FRAMEWORK_LABEL[f]).join(", ")}; do not add findings for other frameworks. Keep every finding, every policy change, and every team action item (Governance, Market access, Engineering, MLR, Legal, Privacy, Security, Finance, Patient support). Name the accountable team and what each level should do. Do not invent evidence. Label this as an internal memo, not a regulatory filing, attestation, or legal opinion. Use markdown. Describe the organization as its org notes do.`,
     user: `${structured}\n\nScout notes (use for context, do not treat as org evidence):\n${input.scoutNotes}`,
     maxTokens: 1800,
   });
@@ -321,6 +346,7 @@ type DraftChange = {
 
 async function draftPolicyChanges(input: {
   orgName: string;
+  frameworks: FrameworkId[];
   retrieved: RetrievedChunk[];
   scoutNotes: string;
   query: string;
@@ -352,7 +378,7 @@ async function draftPolicyChanges(input: {
   const raw = await completeChat({
     system:
       'Return ONLY a JSON array of objects with keys policyTitle, issue, action, team, actionItems. team must be one of: Governance, Market access, Finance, MLR, Patient support, Engineering, Legal, Privacy, Security. actionItems is an array of {team, level, task} where level is Accountable, Responsible, Consulted, or Informed. Each item is one concrete edit to a named internal policy already on file. Never treat regulation text as proof of compliance. If unsure, still propose the most likely SOP edits and name the teams that must act. No markdown.',
-    user: `Org: ${input.orgName}\nInternal policies on file: ${input.docTitles.join("; ") || "(none)"}\nQuestion: ${input.query}\n\n${regBlock || "(no regulation passages)"}\n\n${policyBlock || "(no retrieved policy passages)"}\n\nScout:\n${input.scoutNotes.slice(0, 1500)}`,
+    user: `Org: ${input.orgName}\nIn-scope frameworks (only propose edits for these): ${input.frameworks.map((f) => FRAMEWORK_LABEL[f]).join(", ")}\nInternal policies on file: ${input.docTitles.join("; ") || "(none)"}\nQuestion: ${input.query}\n\n${regBlock || "(no regulation passages)"}\n\n${policyBlock || "(no retrieved policy passages)"}\n\nScout:\n${input.scoutNotes.slice(0, 1500)}`,
     maxTokens: 1400,
   });
   const fallback = () =>
@@ -362,7 +388,7 @@ async function draftPolicyChanges(input: {
           policyTitle: title,
           issue:
             "This SOP is on file but may not match the new rule language we retrieved.",
-          action: `Have the owner of “${title}” compare it to the new regulation and update stale coverage-gap, cost-sharing, or marketing language.`,
+          action: `Have the owner of “${title}” compare it to the new regulation and update any language that no longer matches it.`,
         }));
   if (!raw) return fallback();
   try {
@@ -432,7 +458,7 @@ function fallbackChanges(policies: RetrievedChunk[]): DraftChange[] {
   return policies.slice(0, 3).map((r) => ({
     policyTitle: r.chunk.metadata.title,
     issue: "This internal document may not match the new rule language we retrieved.",
-    action: `Have the owner of “${r.chunk.metadata.title}” compare it to the new regulation and update stale coverage-gap, cost-sharing, or marketing language.`,
+    action: `Have the owner of “${r.chunk.metadata.title}” compare it to the new regulation and update any language that no longer matches it.`,
   }));
 }
 
@@ -475,7 +501,8 @@ export async function analyzeRegulationDocument(doc: StoredDocument) {
   });
 }
 
-function inferFrameworks(query: string, org: FrameworkId[]): FrameworkId[] {
+/** Frameworks the user named outright in their message. */
+function mentionedFrameworks(query: string): FrameworkId[] {
   const hit: FrameworkId[] = [];
   if (/\bcms|medicare|part d|manufacturer discount|ssbci|star ratings\b/i.test(query))
     hit.push("cms-ma-pd");
@@ -484,10 +511,15 @@ function inferFrameworks(query: string, org: FrameworkId[]): FrameworkId[] {
   if (/\bsoc\b/i.test(query)) hit.push("soc2");
   if (/\bpci\b/i.test(query)) hit.push("pci-dss");
   if (/\bgdpr\b/i.test(query)) hit.push("gdpr");
-  if (/\bprivacy\b/i.test(query) && !hit.includes("hipaa")) hit.push("gdpr");
   if (/\bnist\b/i.test(query)) hit.push("nist-csf");
-  const unique = [...new Set(hit.length ? hit : org)];
-  return unique.length ? unique : ["cms-ma-pd", "hipaa"];
+  return [...new Set(hit)];
+}
+
+/** Named frameworks win; otherwise score the org's in-scope list. */
+function inferFrameworks(query: string, org: FrameworkId[]): FrameworkId[] {
+  const named = mentionedFrameworks(query);
+  if (named.length) return named;
+  return org.length ? org : ["cms-ma-pd", "hipaa"];
 }
 
 function inferPolicyRefs(
@@ -607,6 +639,7 @@ function renderReport(input: {
   roadmap: RoadmapItem[];
   docTitles: string[];
   regulationTitle?: string;
+  agencies: string[];
 }) {
   const lines = [
     `# ${input.title}`,
@@ -706,7 +739,7 @@ function renderReport(input: {
   lines.push(
     "",
     "## How to keep up",
-    "- Watch the Regulations feed weekly (FTC, CFPB, SEC, HHS).",
+    `- Watch the Regulations feed weekly (${input.agencies.join(", ") || "add agencies in Settings"}).`,
     "- Ingest each new rule into Governance Agent and re-run this memo.",
     "- Treat missing controls as tickets, not a once-a-year project.",
   );

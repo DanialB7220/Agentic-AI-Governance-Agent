@@ -1,22 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { FRAMEWORK_LABEL } from "@/lib/frameworks";
-import {
-  SCAN_AGENCIES,
-  type FrameworkId,
-  type OrgProfile,
-  type StoredDocument,
-} from "@/lib/types";
-
-const ALL_FRAMEWORKS: FrameworkId[] = [
-  "cms-ma-pd",
-  "hipaa",
-  "soc2",
-  "pci-dss",
-  "gdpr",
-  "nist-csf",
-];
+import type { OrgProfile, StoredDocument } from "@/lib/types";
 
 export default function OrgPage() {
   const [org, setOrg] = useState<OrgProfile | null>(null);
@@ -146,90 +133,13 @@ export default function OrgPage() {
             className="input"
           />
         </Field>
-        <fieldset>
-          <legend className="mb-2 text-sm text-slate-300">In-scope frameworks</legend>
-          <div className="flex flex-wrap gap-2">
-            {ALL_FRAMEWORKS.map((id) => {
-              const on = org.frameworks.includes(id);
-              return (
-                <label
-                  key={id}
-                  className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm ${
-                    on
-                      ? "border-amber-400/50 bg-amber-400/10 text-amber-200"
-                      : "border-white/10 text-slate-400"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={on}
-                    onChange={() =>
-                      setOrg({
-                        ...org,
-                        frameworks: on
-                          ? org.frameworks.filter((f) => f !== id)
-                          : [...org.frameworks, id],
-                      })
-                    }
-                  />
-                  {FRAMEWORK_LABEL[id]}
-                </label>
-              );
-            })}
-          </div>
-        </fieldset>
-        <fieldset>
-          <legend className="mb-2 text-sm text-slate-300">
-            Agencies to scan
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            {SCAN_AGENCIES.map((agency) => {
-              const on = org.scanAgencies.includes(agency.id);
-              return (
-                <label
-                  key={agency.id}
-                  className={`cursor-pointer rounded-full border px-3 py-1.5 text-sm ${
-                    on
-                      ? "border-amber-400/50 bg-amber-400/10 text-amber-200"
-                      : "border-white/10 text-slate-400"
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    className="sr-only"
-                    checked={on}
-                    onChange={() =>
-                      setOrg({
-                        ...org,
-                        scanAgencies: on
-                          ? org.scanAgencies.filter((id) => id !== agency.id)
-                          : [...org.scanAgencies, agency.id],
-                      })
-                    }
-                  />
-                  {agency.label}
-                </label>
-              );
-            })}
-          </div>
-        </fieldset>
-        <Field label="Scan keywords (comma separated)" htmlFor="keywords">
-          <input
-            id="keywords"
-            value={org.scanKeywords.join(", ")}
-            onChange={(e) =>
-              setOrg({
-                ...org,
-                scanKeywords: e.target.value
-                  .split(",")
-                  .map((word) => word.trim())
-                  .filter(Boolean),
-              })
-            }
-            className="input"
-          />
-        </Field>
+        <p className="text-sm text-slate-400">
+          In-scope frameworks and agencies to scan are in{" "}
+          <Link href="/settings" className="text-amber-300 hover:text-amber-200">
+            Settings
+          </Link>
+          .
+        </p>
         <Field label="How we actually operate" htmlFor="notes">
           <textarea
             id="notes"

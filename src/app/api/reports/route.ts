@@ -2,7 +2,7 @@ import { z } from "zod";
 import { generateStandaloneReport } from "@/lib/agents";
 import { jsonError } from "@/lib/http";
 import { authed } from "@/lib/session";
-import { listReports } from "@/lib/store";
+import { getOrg, listReports } from "@/lib/store";
 import { FRAMEWORKS } from "@/lib/types";
 
 export const runtime = "nodejs";
@@ -21,7 +21,7 @@ export const POST = authed(async (req) => {
   if (!parsed.success) return jsonError("Invalid report payload.");
   try {
     const report = await generateStandaloneReport(
-      parsed.data.frameworks ?? ["cms-ma-pd", "hipaa"],
+      parsed.data.frameworks ?? (await getOrg()).frameworks,
     );
     return Response.json({ report });
   } catch (err) {

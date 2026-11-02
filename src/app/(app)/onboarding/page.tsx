@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { CheckCircle2, Circle, Sparkles } from "lucide-react";
+import { AgencyPicker, FrameworkPicker } from "@/components/scope-picker";
 import type { OrgProfile } from "@/lib/types";
 
 type WorkspaceStatus = {
@@ -222,6 +223,14 @@ export default function OnboardingPage() {
             placeholder="e.g. Healthcare manufacturer"
           />
         </label>
+        <FrameworkPicker
+          value={org.frameworks}
+          onChange={(frameworks) => setOrg({ ...org, frameworks })}
+        />
+        <AgencyPicker
+          value={org.scanAgencies}
+          onChange={(scanAgencies) => setOrg({ ...org, scanAgencies })}
+        />
         <button
           type="submit"
           disabled={busy !== "" || !name.trim()}
@@ -229,9 +238,13 @@ export default function OnboardingPage() {
         >
           {busy === "org" ? "Saving…" : "Save organization"}
         </button>
-        <Link href="/org" className="text-xs text-amber-300 hover:text-amber-200">
-          Open full Organization settings
-        </Link>
+        <p className="text-xs text-slate-500">
+          You can add or remove frameworks and agencies later in{" "}
+          <Link href="/settings" className="text-amber-300 hover:text-amber-200">
+            Settings
+          </Link>
+          .
+        </p>
       </form>
 
       <div className="glass mt-4 grid gap-3 rounded-2xl p-4">

@@ -10,6 +10,7 @@ import {
   Gauge,
   MessageSquare,
   ScrollText,
+  Settings,
   Shield,
   Sparkles,
 } from "lucide-react";
@@ -20,6 +21,7 @@ const BASE_NAV = [
   { href: "/reports", label: "Reports", icon: FileBarChart },
   { href: "/risk", label: "Risk", icon: Gauge },
   { href: "/records", label: "Records", icon: ScrollText },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 type Health = {

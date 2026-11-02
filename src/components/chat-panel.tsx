@@ -6,33 +6,70 @@ import { ArrowUp, FileUp, LoaderCircle, Plus, Sparkles, Trash2 } from "lucide-re
 import { DuplicateChoiceDialog } from "./regulation-dialogs";
 import { Markdown } from "./markdown";
 import { scrubJson } from "@/lib/scrub-names";
-import type { ChatEvent, DocumentKind, Report, StoredChat, StoredDocument } from "@/lib/types";
+import type {
+  ChatEvent,
+  DocumentKind,
+  FrameworkId,
+  Report,
+  StoredChat,
+  StoredDocument,
+} from "@/lib/types";
 
-const STARTERS = [
+// Each starter belongs to a framework; only in-scope ones are shown.
+const STARTERS: { framework: FrameworkId; title: string; prompt: string }[] = [
   {
+    framework: "cms-ma-pd",
     title: "CMS-4208-F3 vs our policies",
     prompt:
       "Analyze CMS-4208-F3 / CMS-4212-F (CY2027 MA and Part D final rule) against our current policies. Gap report and 30/60/90 plan. Focus Manufacturer Discount Program, TrOOP, insulin/vaccines, and marketing dates.",
   },
   {
+    framework: "cms-ma-pd",
     title: "Manufacturer Discount Program",
     prompt:
       "What do we still have to change to leave Coverage Gap Discount Program operations and run 42 CFR 423 subpart AA Manufacturer Discount Program, including selected drugs during MFP periods?",
   },
   {
+    framework: "cms-ma-pd",
     title: "Oct 1, 2026 marketing gate",
     prompt:
       "CY2027 marketing and communications apply beginning October 1, 2026. What is missing in our MLR SOP and what should we do before AEP creative locks?",
   },
   {
+    framework: "cms-ma-pd",
     title: "Keep us current",
     prompt:
       "Given our org snapshot and the ingested CMS final rule, what should market access, hub, and MLR do this quarter to stay compliant? Not a full TLC program.",
   },
   {
+    framework: "hipaa",
     title: "HIPAA vs our hub policies",
     prompt:
       "Run a HIPAA readiness gap report against our current policies. Focus Privacy Rule minimum necessary, Security Rule ePHI access and encryption, business associate agreements, breach notification, and workforce training.",
+  },
+  {
+    framework: "soc2",
+    title: "SOC 2 readiness",
+    prompt:
+      "Run a SOC 2 readiness gap report against our current policies. Focus logical access, change management, monitoring, vendor management, and incident response.",
+  },
+  {
+    framework: "pci-dss",
+    title: "PCI DSS cardholder data",
+    prompt:
+      "Run a PCI DSS gap report against our current policies. Focus cardholder data scope, encryption, access control, logging, and vulnerability management.",
+  },
+  {
+    framework: "gdpr",
+    title: "GDPR data subject rights",
+    prompt:
+      "Run a GDPR gap report against our current policies. Focus lawful basis, data subject requests, processor agreements, cross-border transfers, and breach notification.",
+  },
+  {
+    framework: "nist-csf",
+    title: "NIST CSF posture",
+    prompt:
+      "Run a NIST CSF gap report against our current policies across Govern, Identify, Protect, Detect, Respond, and Recover.",
   },
 ];
 
@@ -102,6 +139,14 @@ export function ChatPanel({
     existingId: string;
   } | null>(null);
   const box = useRef<HTMLTextAreaElement>(null);
+  const [frameworks, setFrameworks] = useState<FrameworkId[] | null>(null);
+
+  useEffect(() => {
+    fetch("/api/org")
+      .then((r) => r.json())
+      .then((j) => setFrameworks(j.org?.frameworks ?? null))
+      .catch(() => {});
+  }, []);
 
   function loadSaved() {
     fetch("/api/documents")
@@ -388,7 +433,9 @@ export function ChatPanel({
             </div>
           ) : null}
           <div className="mt-8 grid gap-3 sm:grid-cols-2">
-            {STARTERS.map((s) => (
+            {STARTERS.filter(
+              (s) => !frameworks || frameworks.includes(s.framework),
+            ).map((s) => (
               <button
                 key={s.title}
                 type="button"
