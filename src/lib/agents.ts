@@ -21,8 +21,14 @@ import type {
   TeamActionItem,
 } from "./types";
 
+// Only an explicit request ("run a gap report", "generate an audit") builds a
+// full memo; mentioning a framework in conversation should just get an answer.
 const AUDIT_RE =
-  /\b(report|audit|gap|implement|roadmap|readiness|soc\s*2|pci|gdpr|nist|hipaa|phi|ephi|keep up|what to do|cms|medicare|part d|manufacturer discount)\b/i;
+  /\b(run|generate|create|make|build|produce|draft|give me|do)\b[^.?!]{0,40}\b(report|audit|gap analysis|gap assessment|readiness memo|roadmap|30\/60\/90)\b/i;
+
+// Greetings and small talk don't need retrieval or org context.
+const SMALL_TALK_RE =
+  /^(hi|hello|hey|yo|sup|thanks|thank you|ok|okay|cool|nice|great|bye|good (morning|afternoon|evening)|how are you|who are you|what can you do)\b[\s!.?]*$/i;
 
 export async function* runCopilot(input: {
   messages: { role: "user" | "assistant"; content: string }[];
@@ -42,6 +48,31 @@ export async function* runCopilot(input: {
     input.mode === "report" ||
     input.mode === "analyze" ||
     AUDIT_RE.test(query);
+  // Earlier turns, so follow-ups like "why?" or "shorter" make sense.
+  const history = input.messages
+    .slice(0, input.messages.lastIndexOf(last))
+    .filter((m) => m.content.trim())
+    .slice(-12)
+    .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }));
+
+  if (!wantReport && SMALL_TALK_RE.test(query)) {
+    const org = await getOrg();
+    const reply = await completeChat({
+      system: chatSystemPrompt(org.name),
+      user: query,
+      history,
+      temperature: 0.7,
+      maxTokens: 400,
+    });
+    yield {
+      type: "delta",
+      text:
+        reply ||
+        "Hi! Ask me anything — about your policies, a regulation, or something else. Say **run a gap report** when you want a full readiness memo.",
+    };
+    yield { type: "done" };
+    return;
+  }
 
   yield { type: "status", step: "Retrieving policies, evidence, and regs", agent: "scout" };
   const [org, docs, retrieved, feed] = await Promise.all([
@@ -67,6 +98,8 @@ export async function* runCopilot(input: {
 
   const scoutNotes = await runScout({
     query,
+    history,
+    conversational: !wantReport,
     orgName: org.name,
     orgNotes: `${org.industry}. Frameworks: ${org.frameworks.map((f) => FRAMEWORK_LABEL[f]).join(", ")}. ${org.notes}`,
     retrieved,
@@ -112,8 +145,14 @@ export async function* runCopilot(input: {
   yield { type: "done" };
 }
 
+function chatSystemPrompt(orgName: string) {
+  return `You are Governance Agent, a friendly, knowledgeable assistant for ${orgName}. Talk like a normal chatbot: answer the user's actual question directly and conversationally, follow up on earlier turns, and match the length of your reply to the question (short questions get short answers). You can help with anything — general questions, writing, explanations — not only compliance. When the question is about governance, policies, or regulations, use the retrieved context provided and cite document titles; passages labeled REGULATION are government text and never prove the company already complies. Ignore retrieved context that isn't relevant to the question, and don't summarize it unprompted. Don't repeat a previous answer; if the user asks something new, answer that. Only mention gap reports if the user seems to want one (they can say "run a gap report"). Not legal advice.`;
+}
+
 async function runScout(input: {
   query: string;
+  history?: { role: "user" | "assistant"; content: string }[];
+  conversational?: boolean;
   orgName: string;
   orgNotes: string;
   retrieved: RetrievedChunk[];
@@ -127,11 +166,19 @@ async function runScout(input: {
     })
     .join("\n\n");
 
-  const llm = await completeChat({
-    system:
-      "You are Scout, a regulation analyst for a governance copilot. Retrieved passages are labeled POLICY (company) or REGULATION (government). Never treat a REGULATION as proof the company already complies. Cite document titles. Not a legal opinion. If context is thin, say what is missing.",
-    user: `Org: ${input.orgName}\n${input.orgNotes}\n\nRecent federal items:\n${input.recentRegs.join("\n") || "(none)"}\n\nRetrieved context:\n${context || "(none)"}\n\nUser question:\n${input.query}`,
-  });
+  const background = `Org: ${input.orgName}\n${input.orgNotes}\n\nRecent federal items:\n${input.recentRegs.join("\n") || "(none)"}\n\nRetrieved context:\n${context || "(none)"}`;
+  const llm = input.conversational
+    ? await completeChat({
+        system: `${chatSystemPrompt(input.orgName)}\n\nBackground (use only if relevant to the question):\n${background}`,
+        user: input.query,
+        history: input.history,
+        temperature: 0.5,
+      })
+    : await completeChat({
+        system:
+          "You are Scout, a regulation analyst for a governance copilot. Retrieved passages are labeled POLICY (company) or REGULATION (government). Never treat a REGULATION as proof the company already complies. Cite document titles. Not a legal opinion. If context is thin, say what is missing.",
+        user: `${background}\n\nUser question:\n${input.query}`,
+      });
 
   if (llm) return llm;
 

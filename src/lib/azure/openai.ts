@@ -35,14 +35,18 @@ export async function completeChat(opts: {
   system: string;
   user: string;
   maxTokens?: number;
+  /** Earlier turns, oldest first, sent before `user`. */
+  history?: { role: "user" | "assistant"; content: string }[];
+  temperature?: number;
 }): Promise<string | null> {
   if (!azureConfigured()) return null;
   const res = await openai().chat.completions.create({
     model: chatDeployment(),
-    temperature: 0.2,
+    temperature: opts.temperature ?? 0.2,
     max_tokens: opts.maxTokens ?? 1400,
     messages: [
       { role: "system", content: opts.system },
+      ...(opts.history ?? []),
       { role: "user", content: opts.user },
     ],
   });
