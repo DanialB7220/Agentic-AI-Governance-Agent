@@ -296,7 +296,10 @@ async function runAuditor(input: {
     }),
   );
 
+  const createdAt = new Date();
+  const dateLine = `**Date:** ${formatMemoDate(createdAt)}`;
   const structured = renderReport({
+    dateLine,
     title,
     orgName: input.orgName,
     orgNotes: input.orgNotes,
@@ -315,6 +318,8 @@ async function runAuditor(input: {
     user: `${structured}\n\nScout notes (use for context, do not treat as org evidence):\n${input.scoutNotes}`,
     maxTokens: 1800,
   });
+  // The rewrite can drop or misstate the date, so pin it under the title.
+  const markdown = withDateLine(narrative || structured, dateLine);
 
   return {
     id: createId("rpt"),
@@ -331,8 +336,8 @@ async function runAuditor(input: {
     findings,
     changes,
     roadmap,
-    markdown: narrative || structured,
-    createdAt: new Date().toISOString(),
+    markdown,
+    createdAt: createdAt.toISOString(),
   };
 }
 
@@ -628,6 +633,25 @@ function summarize(
   return `${pct}% of scored controls look covered. ${missing} missing, ${partial} partial.${changeBit} Internal memo only — not an attestation.`;
 }
 
+function formatMemoDate(date: Date) {
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+/** Put the date line right after the first heading, replacing any the model wrote. */
+function withDateLine(markdown: string, dateLine: string) {
+  const lines = markdown
+    .split("\n")
+    .filter((line) => !/^\s*(\*\*)?(memo )?date(\*\*)?:(\*\*)?\s/i.test(line));
+  const heading = lines.findIndex((line) => line.startsWith("# "));
+  if (heading === -1) return [dateLine, "", ...lines].join("\n");
+  lines.splice(heading + 1, 0, "", dateLine);
+  return lines.join("\n");
+}
+
 function renderReport(input: {
   title: string;
   orgName: string;
@@ -640,10 +664,12 @@ function renderReport(input: {
   docTitles: string[];
   regulationTitle?: string;
   agencies: string[];
+  dateLine: string;
 }) {
   const lines = [
     `# ${input.title}`,
     "",
+    input.dateLine,
     `**Organization:** ${input.orgName}`,
     input.regulationTitle
       ? `**Regulation:** ${input.regulationTitle}`
